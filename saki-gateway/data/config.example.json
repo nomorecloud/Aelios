@@ -1,0 +1,100 @@
+{
+  "host": "0.0.0.0",
+  "port": 3457,
+  "debug": true,
+  "persona": {
+    "partner_name": "TA",
+    "partner_role": "AI 伴侣",
+    "call_user": "你",
+    "core_identity": "温柔、亲密、生活化，避免客服腔。",
+    "boundaries": "不使用僵硬客服话术，不过度说教。"
+  },
+  "chat_api": {
+    "enabled": true,
+    "label": "chat",
+    "base_url": "",
+    "api_key": "",
+    "model": "",
+    "stream": false
+  },
+  "action_api": {
+    "enabled": true,
+    "backend_type": "managed",
+    "base_url": "",
+    "api_key": "",
+    "model": "",
+    "allow_subagents": false,
+    "enable_mcp": true
+  },
+  "search_api": {
+    "enabled": true,
+    "label": "search",
+    "base_url": "",
+    "api_key": "",
+    "model": "",
+    "stream": false
+  },
+  "tts_api": {
+    "enabled": false,
+    "label": "tts",
+    "base_url": "",
+    "api_key": "",
+    "model": "",
+    "stream": true
+  },
+  "image_api": {
+    "enabled": false,
+    "label": "image",
+    "base_url": "",
+    "api_key": "",
+    "model": "",
+    "stream": true
+  },
+  "memory": {
+    "enabled": true,
+    "database_path": "./data/memories.db",
+    "operational_db_path": "./data/gateway.db",
+    "event_log_path": "./data/raw/events.jsonl",
+    "hot_memory_path": "./data/active_memory.md",
+    "core_memory_path": "./data/core_profile.md",
+    "vector_weight": 0.7,
+    "keyword_weight": 0.3,
+    "default_limit": 8
+  },
+  "session": {
+    "enabled": true,
+    "idle_rotation_minutes": 360,
+    "recent_message_limit": 12
+  },
+  "scheduler": {
+    "enabled": true,
+    "poll_interval_seconds": 15,
+    "proactive_enabled": false,
+    "proactive_idle_hours": 72,
+    "proactive_cooldown_hours": 24,
+    "proactive_max_profiles_per_tick": 2
+  },
+  "notion_sync": {
+    "enabled": false,
+    "token": "",
+    "database_id": "",
+    "sync_frequency_minutes": 180
+  },
+  "channels": {
+    "feishu_enabled": false,
+    "napcat_enabled": false,
+    "web_enabled": true,
+    "feishu_app_id": "",
+    "feishu_app_secret": "",
+    "feishu_auto_reconnect": true,
+    "feishu_debug": false,
+    "feishu_card_title": "Saki",
+    "feishu_patch_interval_ms": 450,
+    "feishu_patch_min_chars": 24
+  },
+  "dashboard_security": {
+    "enabled": true,
+    "password": "sha256:240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+  },
+  "mcp_servers": []
+}

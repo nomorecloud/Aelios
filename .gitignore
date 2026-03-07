@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Runtime data
+saki-gateway/data/config.json
+saki-gateway/data/*.db
+saki-gateway/data/*.db-shm
+saki-gateway/data/*.db-wal
+saki-gateway/data/raw/
+
+# Local secrets / overrides
+.env
+.env.*
