@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
@@ -158,6 +159,35 @@ def normalize_dashboard_password(value: str) -> str:
     if text.startswith("sha256:"):
         return text
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def resolve_data_path(root: Path, configured_path: str, default_relative: str) -> Path:
+    raw = str(configured_path or "").strip()
+    candidate = Path(raw).expanduser() if raw else Path(default_relative)
+    if raw and re.match(r"^[A-Za-z]:[\\/]", raw):
+        candidate = Path(default_relative)
+    if not candidate.is_absolute():
+        resolved = (root / candidate).resolve()
+        try:
+            resolved.relative_to(root)
+            return resolved
+        except ValueError:
+            return (root / default_relative).resolve()
+
+    resolved = candidate.resolve()
+    if resolved.exists():
+        return resolved
+    try:
+        resolved.relative_to(root)
+        return resolved
+    except ValueError:
+        pass
+
+    if "/data/" in resolved.as_posix():
+        suffix = resolved.as_posix().split("/data/", 1)[1]
+        return (root / "data" / suffix).resolve()
+
+    return (root / default_relative).resolve()
 
 
 def _apply_env_overrides(config: AppConfig) -> AppConfig:

@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .config import ConfigStore, default_config_path
 from .config import normalize_dashboard_password
+from .config import resolve_data_path
 from .llm import extract_text_content, request_chat_completion, stream_chat_completion
 from .llm import extract_finish_reason, extract_tool_calls
 from .memory import MemoryStore
@@ -31,17 +32,27 @@ from .tools import (
 
 class GatewayApp:
     def __init__(self, root: Path):
-        self.root = root
+        self.root = root.resolve()
         self.dashboard_root = self._find_dashboard_root()
-        self.config_store = ConfigStore(default_config_path(root))
+        self.config_store = ConfigStore(default_config_path(self.root))
+        self._memory_db_path = resolve_data_path(self.root, self.config_store.config.memory.database_path, "data/memories.db")
+        self._runtime_db_path = resolve_data_path(self.root, self.config_store.config.memory.operational_db_path, "data/gateway.db")
+        self._event_log_path = resolve_data_path(self.root, self.config_store.config.memory.event_log_path, "data/raw/events.jsonl")
+        self._hot_memory_path = resolve_data_path(self.root, self.config_store.config.memory.hot_memory_path, "data/active_memory.md")
+        self._core_memory_path = resolve_data_path(self.root, self.config_store.config.memory.core_memory_path, "data/core_profile.md")
+        self.config_store.config.memory.database_path = str(self._memory_db_path.relative_to(self.root))
+        self.config_store.config.memory.operational_db_path = str(self._runtime_db_path.relative_to(self.root))
+        self.config_store.config.memory.event_log_path = str(self._event_log_path.relative_to(self.root))
+        self.config_store.config.memory.hot_memory_path = str(self._hot_memory_path.relative_to(self.root))
+        self.config_store.config.memory.core_memory_path = str(self._core_memory_path.relative_to(self.root))
         self.memory_store = MemoryStore(
-            root / self.config_store.config.memory.database_path.replace("./", ""),
+            self._memory_db_path,
             vector_weight=self.config_store.config.memory.vector_weight,
             keyword_weight=self.config_store.config.memory.keyword_weight,
         )
         self.runtime_store = RuntimeStore(
-            root / self.config_store.config.memory.operational_db_path.replace("./", ""),
-            root / self.config_store.config.memory.event_log_path.replace("./", ""),
+            self._runtime_db_path,
+            self._event_log_path,
         )
         self.tools = build_default_registry(
             root,
@@ -82,7 +93,7 @@ class GatewayApp:
             "context_files": {
                 "core_profile": str(self._core_memory_file()),
                 "active_memory": str(self._active_memory_file()),
-                "event_log": str(self.root / self.config_store.config.memory.event_log_path.replace("./", "")),
+                "event_log": str(self._event_log_path),
             },
         }
 
@@ -1074,10 +1085,10 @@ class GatewayApp:
             self._write_text_file(active_file, self._render_active_memory())
 
     def _core_memory_file(self) -> Path:
-        return self.root / self.config_store.config.memory.core_memory_path.replace("./", "")
+        return self._core_memory_path
 
     def _active_memory_file(self) -> Path:
-        return self.root / self.config_store.config.memory.hot_memory_path.replace("./", "")
+        return self._hot_memory_path
 
     def _render_core_profile(self) -> str:
         persona = self.config_store.config.persona
