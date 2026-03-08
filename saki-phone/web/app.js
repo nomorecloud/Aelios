@@ -934,6 +934,26 @@ class SakiPhoneApp {
             <input type="password" id="cfg-channels-feishu_app_secret" value="${this.escAttr(channels.feishu_app_secret || '')}">
           </div>
         </div>
+
+        <div class="setting-item toggle" style="margin-top:16px;">
+          <label>QQ / NapCat</label>
+          <label class="switch">
+            <input type="checkbox" id="cfg-channels-napcat_enabled" ${channels.napcat_enabled ? 'checked' : ''}
+                   onchange="app.toggleNapcatFields()">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div id="napcat-fields" style="display:${channels.napcat_enabled ? 'block' : 'none'};">
+          <div class="setting-item">
+            <label>NapCat Base URL</label>
+            <input type="text" id="cfg-channels-napcat_base_url" value="${this.escAttr(channels.napcat_base_url || '')}" placeholder="http://127.0.0.1:3000">
+          </div>
+          <div class="setting-item">
+            <label>Access Token</label>
+            <input type="password" id="cfg-channels-napcat_access_token" value="${this.escAttr(channels.napcat_access_token || '')}" placeholder="OneBot token，可留空">
+          </div>
+          <div class="about-info" style="margin-bottom:12px;">建议使用 NapCat / OneBot v11 正向 HTTP API + 事件上报到网关 webhook。</div>
+        </div>
         <button class="btn btn-primary btn-block btn-save" onclick="app.saveSection('channels')">保存</button>
       </div>
 
@@ -1056,6 +1076,12 @@ class SakiPhoneApp {
     if (fields) fields.style.display = enabled ? 'block' : 'none';
   }
 
+  toggleNapcatFields() {
+    const enabled = document.getElementById('cfg-channels-napcat_enabled')?.checked;
+    const fields = document.getElementById('napcat-fields');
+    if (fields) fields.style.display = enabled ? 'block' : 'none';
+  }
+
   async saveSection(section) {
     let payload = {};
 
@@ -1129,6 +1155,9 @@ class SakiPhoneApp {
             feishu_enabled: this.getChecked('cfg-channels-feishu_enabled'),
             feishu_app_id: this.getVal('cfg-channels-feishu_app_id'),
             feishu_app_secret: this.getVal('cfg-channels-feishu_app_secret'),
+            napcat_enabled: this.getChecked('cfg-channels-napcat_enabled'),
+            napcat_base_url: this.getVal('cfg-channels-napcat_base_url'),
+            napcat_access_token: this.getVal('cfg-channels-napcat_access_token'),
           }
         };
         break;

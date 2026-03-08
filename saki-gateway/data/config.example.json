@@ -86,9 +86,11 @@
     "web_enabled": true,
     "feishu_app_id": "",
     "feishu_app_secret": "",
+    "napcat_base_url": "http://127.0.0.1:3000",
+    "napcat_access_token": "",
     "feishu_auto_reconnect": true,
     "feishu_debug": false,
-    "feishu_card_title": "Saki",
+    "feishu_card_title": "AI 伴侣",
     "feishu_patch_interval_ms": 450,
     "feishu_patch_min_chars": 24
   },
