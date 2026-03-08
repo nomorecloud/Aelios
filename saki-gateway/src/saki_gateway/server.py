@@ -284,6 +284,7 @@ class GatewayApp:
         last_response: Dict[str, Any] = {}
         tool_provider = self._preferred_tool_provider()
         final_messages = self._build_action_runtime_messages(messages, tool_contexts, session_id)
+        executed_tool_fingerprints: set[tuple[str, str]] = set()
         for _ in range(max_rounds):
             response = request_chat_completion(
                 tool_provider,
@@ -325,8 +326,26 @@ class GatewayApp:
                 except json.JSONDecodeError:
                     arguments = {"raw_arguments": raw_arguments}
                 arguments = self._enrich_tool_arguments(tool_name, arguments, profile_id)
+                fingerprint = (tool_name, json.dumps(arguments, ensure_ascii=False, sort_keys=True))
+                if tool_name == "create_reminder" and fingerprint in executed_tool_fingerprints:
+                    result = {
+                        "ok": True,
+                        "tool": tool_name,
+                        "deduplicated": True,
+                        "note": "duplicate reminder creation in the same request was skipped",
+                    }
+                    final_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": str(tool_call.get("id", "") or tool_name),
+                            "name": tool_name,
+                            "content": json.dumps(result, ensure_ascii=False),
+                        }
+                    )
+                    continue
                 try:
                     result = self.tools.execute(tool_name, arguments)
+                    executed_tool_fingerprints.add(fingerprint)
                 except Exception as error:
                     result = {
                         "ok": False,
@@ -424,6 +443,7 @@ class GatewayApp:
             "你是行动核（Action Runtime），不是直接对用户说话的伴侣人格。",
             "你的职责是判断是否需要调用工具，并在需要时优先调用工具。",
             "如果用户消息涉及链接、网页、文件、记忆检索、提醒、图片、搜索、外部信息获取，就优先用工具，不要直接假装自己看过。",
+            "同一轮请求中，同一个提醒只允许创建一次；一旦已经成功创建提醒，不要再次调用 create_reminder。",
             "如果不需要工具，给出极简事实性结论，交给聊天核再润色。",
             "你输出给系统，不输出给最终用户；工具结果会回流给聊天核。",
             f"当前伴侣名称：{config.persona.partner_name}；伴侣身份：{config.persona.partner_role}。",

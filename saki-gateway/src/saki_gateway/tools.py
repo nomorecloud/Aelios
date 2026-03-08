@@ -458,10 +458,26 @@ def build_default_registry(
             raise ValueError("content is required")
         trigger_at = str(args.get("trigger_at", "")).strip()
         minutes = int(args.get("minutes", 0) or 0)
+        metadata = dict(args.get("metadata") or {})
+        if minutes > 0:
+            metadata.setdefault("requested_minutes", minutes)
         if not trigger_at:
             if minutes <= 0:
                 raise ValueError("trigger_at or minutes is required")
             trigger_at = (datetime.utcnow() + timedelta(minutes=minutes)).isoformat()
+        for existing in runtime_store.list_reminders(profile_id=profile_id, status="pending", limit=100):
+            existing_minutes = int((existing.metadata or {}).get("requested_minutes", 0) or 0)
+            same_relative_reminder = minutes > 0 and existing.content == content and existing_minutes == minutes
+            same_absolute_reminder = existing.content == content and existing.trigger_at == trigger_at
+            if same_relative_reminder or same_absolute_reminder:
+                return {
+                    "reminder_id": existing.reminder_id,
+                    "profile_id": existing.profile_id,
+                    "content": existing.content,
+                    "trigger_at": existing.trigger_at,
+                    "status": existing.status,
+                    "deduplicated": True,
+                }
         reminder_id = f"rem_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
         reminder = runtime_store.create_reminder(
             reminder_id=reminder_id,
@@ -469,7 +485,7 @@ def build_default_registry(
             content=content,
             trigger_at=trigger_at,
             channel=str(args.get("channel", "") or "").strip(),
-            metadata=args.get("metadata") or {},
+            metadata=metadata,
         )
         return {
             "reminder_id": reminder.reminder_id,
