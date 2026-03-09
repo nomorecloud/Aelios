@@ -8,7 +8,7 @@ import re
 import sys
 import threading
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -98,8 +98,18 @@ class GatewayApp:
             lambda: self.config_store.config.scheduler,
             self._deliver_due_reminder,
             self._send_idle_proactive_ping,
-            on_memory_digest=self._run_memory_digest,
+            on_memory_digest=None,
         )
+        self._goodnight_phrases = [
+            "晚安",
+            "先睡了",
+            "睡觉了",
+            "我要睡了",
+            "我去睡了",
+            "睡了",
+            "good night",
+            "goodnight",
+        ]
 
     def state(self) -> Dict[str, Any]:
         config = self.config_store.config
@@ -108,7 +118,10 @@ class GatewayApp:
             "port": config.port,
             "persona": config.persona.partner_name,
             "enabled_tools": self.tools.list_enabled(),
-            "memory_count": len(self.memory_store.list_memories(limit=1000)),
+            "memory_count": len(self.list_memories_grouped().get("items", [])),
+            "log_count": len(
+                self.memory_store.list_memories(limit=1000, memory_kind="daily_log")
+            ),
             "memory_enabled": config.memory.enabled,
             "runtime": self.runtime_store.stats(),
             "channels": {
@@ -203,7 +216,10 @@ class GatewayApp:
         )
         self._refresh_active_memory()
         self._extract_memories_from_chat(
-            messages, content, session_id=session.session_id
+            messages,
+            content,
+            profile_id=profile_id,
+            session_id=session.session_id,
         )
         return {
             "content": content,
@@ -247,7 +263,10 @@ class GatewayApp:
         )
         self._refresh_active_memory()
         self._extract_memories_from_chat(
-            messages, content, session_id=session.session_id
+            messages,
+            content,
+            profile_id=profile_id,
+            session_id=session.session_id,
         )
         return {
             "content": content,
@@ -349,7 +368,10 @@ class GatewayApp:
                 )
                 self._refresh_active_memory()
                 self._extract_memories_from_chat(
-                    messages, "".join(collected), session_id=session_id
+                    messages,
+                    "".join(collected),
+                    profile_id=profile_id,
+                    session_id=session_id,
                 )
 
         return generate()
@@ -565,10 +587,8 @@ class GatewayApp:
             "你的职责是判断是否需要调用工具，并在需要时优先调用工具。",
             "如果用户消息涉及链接、网页、文件、记忆检索、提醒、图片、搜索、外部信息获取，就优先用工具，不要直接假装自己看过。",
             "同一轮请求中，同一个提醒只允许创建一次；一旦已经成功创建提醒，不要再次调用 create_reminder。",
-            "【记忆保存】如果用户透露了值得长期记住的信息，请主动调用 save_memory 工具保存。",
-            "值得记住的信息包括但不限于：个人偏好、重要约定/承诺、纪念日/生日、生活习惯、情绪状态变化、重大事件、明确表达的禁忌或边界。",
-            "记忆的 key 应简短概括（如「喜欢猫」「生日是3月15日」），content 应包含完整上下文。",
-            "不要保存纯闲聊、打招呼、重复信息、或已经存在的记忆。如果不确定是否值得保存，宁可不保存。",
+            "长期记忆与聊天日志由网关在对话后统一维护，你不要主动调用 save_memory 保存聊天内容。",
+            "如需了解用户的长期信息，可以调用 search_memory 检索，但不要把当前对话逐条写入长期记忆。",
             "如果不需要工具，给出极简事实性结论，交给聊天核再润色。",
             "你输出给系统，不输出给最终用户；工具结果会回流给聊天核。",
             f"当前伴侣名称：{config.persona.partner_name}；伴侣身份：{config.persona.partner_role}。",
@@ -601,7 +621,7 @@ class GatewayApp:
         specs: list[Dict[str, Any]] = []
         for item in self.tools.list_enabled():
             tool_id = str(item.get("id", "") or "")
-            if tool_id in {"send_proactive_message"}:
+            if tool_id in {"send_proactive_message", "save_memory"}:
                 continue
             specs.append(
                 {
@@ -985,7 +1005,10 @@ class GatewayApp:
     def list_memories_grouped(self, category: str = "") -> Dict[str, Any]:
         records = [
             self._serialize_memory(record)
-            for record in self.memory_store.list_memories(limit=1000)
+            for record in self.memory_store.list_memories(
+                limit=1000, memory_kind="long_term"
+            )
+            if getattr(record, "category", "") != "memory_refresh"
         ]
         if category:
             items = [item for item in records if item["category"] == category]
@@ -1012,11 +1035,33 @@ class GatewayApp:
         }
         return grouped
 
+    def list_daily_logs_payload(
+        self, profile_id: str = "", session_id: str = "", limit: int = 60
+    ) -> Dict[str, Any]:
+        records = [
+            self._serialize_memory(record)
+            for record in self.memory_store.list_memories(
+                limit=max(1, min(limit, 365)), memory_kind="daily_log"
+            )
+        ]
+        items = records
+        if profile_id:
+            items = [item for item in items if item.get("profile_id") == profile_id]
+        if session_id:
+            items = [item for item in items if item.get("session_id") == session_id]
+        return {
+            "profile_id": profile_id,
+            "session_id": session_id,
+            "items": items,
+            "stats": {"total": len(items)},
+        }
+
     def search_memories_payload(self, query: str) -> Dict[str, Any]:
         items = (
             [
                 self._serialize_memory(record)
                 for record in self.memory_store.search(query)
+                if getattr(record, "category", "") != "memory_refresh"
             ]
             if query
             else []
@@ -1218,6 +1263,7 @@ class GatewayApp:
             memory_id=raw_id,
             key=title,
             content=str(body.get("content", "") or ""),
+            memory_kind="long_term",
             category=str(body.get("category", "other") or "other"),
             importance=float(body.get("importance", 0.5) or 0.5),
             session_id=str(body.get("session_id", "") or ""),
@@ -1369,11 +1415,15 @@ class GatewayApp:
         return None
 
     def _serialize_memory(self, record: Any) -> Dict[str, Any]:
+        profile_id = ""
+        if isinstance(record.session_id, str) and ":" in record.session_id:
+            profile_id = record.session_id.rsplit(":", 1)[0]
         return {
             "id": record.id,
             "title": record.key,
             "key": record.key,
             "content": record.content,
+            "memory_kind": getattr(record, "memory_kind", "long_term"),
             "category": record.category,
             "importance": record.importance,
             "createdAt": record.created_at,
@@ -1381,6 +1431,7 @@ class GatewayApp:
             "date": record.created_at[:10] if record.created_at else "",
             "source": "gateway",
             "session_id": record.session_id,
+            "profile_id": profile_id,
             "final_score": getattr(record, "final_score", 0.0),
         }
 
@@ -1437,37 +1488,135 @@ class GatewayApp:
 
     def _render_active_memory(self) -> str:
         lines = [f"更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"]
-        recent_memories = self.memory_store.list_memories(limit=8)
+        recent_memories = self.memory_store.list_memories(
+            limit=6, memory_kind="long_term"
+        )
+        recent_memories = [
+            record for record in recent_memories if record.category != "memory_refresh"
+        ]
         if recent_memories:
             lines.append("")
-            lines.append("近期记忆:")
+            lines.append("长期记忆:")
             for record in recent_memories:
                 lines.append(
                     f"- [{record.category}] {record.key}: {record.content[:160]}"
                 )
-        recent_events = self.memory_store.list_events(limit=10)
-        if recent_events:
+        recent_logs = self.memory_store.list_memories(limit=1, memory_kind="daily_log")
+        if recent_logs:
             lines.append("")
-            lines.append("最近事件:")
-            for event in reversed(recent_events):
-                summary = self._summarize_event(event)
-                if summary:
-                    lines.append(f"- {summary}")
+            lines.append("今日日志:")
+            for record in recent_logs:
+                lines.append(f"- {record.content[:220]}")
         return "\n".join(lines).strip() + "\n"
 
     def _refresh_active_memory(self) -> None:
         self._write_text_file(self._active_memory_file(), self._render_active_memory())
 
+    def _local_day_bounds(self) -> tuple[datetime, datetime]:
+        start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        return start, start + timedelta(days=1)
+
+    def _daily_log_memory_id(self, profile_id: str, day: datetime) -> str:
+        slug = re.sub(r"[^a-zA-Z0-9:_-]+", "_", profile_id).strip("_") or "local-user"
+        return f"log_{slug}_{day.strftime('%Y%m%d')}"
+
+    def _daily_log_session_ref(self, profile_id: str, day: datetime) -> str:
+        return f"{profile_id}:{day.strftime('%Y-%m-%d')}"
+
+    def _serialize_daily_log(
+        self,
+        *,
+        profile_id: str,
+        day: datetime,
+        messages: list[Dict[str, Any]],
+        threshold: int,
+        previous_threshold: int,
+    ) -> tuple[str, str]:
+        title = f"{day.strftime('%Y-%m-%d')} 聊天日志"
+        header = [
+            f"日期：{day.strftime('%Y-%m-%d')}",
+            f"档位：已整理 {threshold} 条消息",
+            f"上次档位：{previous_threshold}",
+            f"用户：{profile_id}",
+            "",
+            "聊天摘录：",
+        ]
+        body: list[str] = []
+        for item in messages:
+            role = "用户" if item.get("role") == "user" else "Aelios"
+            timestamp = str(item.get("created_at", "") or "")
+            try:
+                time_label = datetime.fromisoformat(timestamp).strftime("%H:%M")
+            except ValueError:
+                time_label = "--:--"
+            content = str(item.get("content", "") or "").strip()
+            if not content:
+                continue
+            body.append(f"- [{time_label}] {role}：{content}")
+        return title, "\n".join(header + body).strip()
+
+    def _update_daily_log(self, *, profile_id: str, session_id: str) -> None:
+        day_start, day_end = self._local_day_bounds()
+        start_iso = day_start.isoformat()
+        end_iso = day_end.isoformat()
+        total_messages = self.runtime_store.count_messages_between(
+            profile_id=profile_id,
+            start_at=start_iso,
+            end_at=end_iso,
+        )
+        threshold = total_messages // 20
+        if threshold <= 0:
+            return
+        log_id = self._daily_log_memory_id(profile_id, day_start)
+        existing = self.memory_store.get_memory(log_id)
+        previous_threshold = 0
+        if existing is not None:
+            match = re.search(r"已整理\s+(\d+)\s+条消息", existing.content)
+            if match:
+                previous_threshold = max(0, int(match.group(1)) // 20)
+        if threshold <= previous_threshold:
+            return
+        messages = self.runtime_store.list_messages_between(
+            profile_id=profile_id,
+            start_at=start_iso,
+            end_at=end_iso,
+            limit=max(200, threshold * 30),
+        )
+        if not messages:
+            return
+        capped_count = threshold * 20
+        selected = messages[:capped_count]
+        title, content = self._serialize_daily_log(
+            profile_id=profile_id,
+            day=day_start,
+            messages=selected,
+            threshold=capped_count,
+            previous_threshold=previous_threshold * 20,
+        )
+        self.memory_store.upsert_memory(
+            memory_id=log_id,
+            key=title,
+            content=content,
+            memory_kind="daily_log",
+            category="daily_log",
+            importance=0.2,
+            session_id=self._daily_log_session_ref(profile_id, day_start),
+        )
+        self._refresh_active_memory()
+
+    def _should_trigger_goodnight_refresh(self, user_text: str) -> bool:
+        normalized = str(user_text or "").strip().lower()
+        if not normalized:
+            return False
+        return any(phrase in normalized for phrase in self._goodnight_phrases)
+
     def _extract_memories_from_chat(
         self,
         messages: list[Dict[str, Any]],
         response_content: str,
+        profile_id: str = "",
         session_id: str = "",
     ) -> None:
-        provider = self._preferred_extraction_provider()
-        if provider is None:
-            return
-
         user_text = ""
         for msg in messages:
             if msg.get("role") == "user":
@@ -1475,103 +1624,59 @@ class GatewayApp:
                 if isinstance(content, str):
                     user_text += content + "\n"
         user_text = user_text.strip()
-        if not user_text or len(user_text) < 6:
+        if not user_text:
             return
+        profile = profile_id or "local-user"
+        self._update_daily_log(profile_id=profile, session_id=session_id)
+        if self._should_trigger_goodnight_refresh(user_text):
+            self._run_memory_digest(profile_id=profile, session_id=session_id)
 
-        def _run() -> None:
-            try:
-                extraction_prompt = (
-                    "你是一个记忆提取器。分析以下对话，判断是否包含值得长期记住的信息。\n"
-                    "值得记住的类型：个人偏好、重要承诺/约定、纪念日/生日、生活习惯、"
-                    "重大事件、情绪状态变化、明确禁忌或边界、长期目标。\n\n"
-                    "不值得记住的：纯闲聊打招呼、重复已知信息、临时性话题。\n\n"
-                    f"用户说：{user_text[:1500]}\n"
-                    f"AI回复：{response_content[:800]}\n\n"
-                    "如果有值得记住的信息，请用以下 JSON 数组格式输出（可以有多条）：\n"
-                    '[{"key": "简短标题", "content": "详细内容", "category": "preference|promise|event|anniversary|emotion|habit|boundary|other", "importance": 0.5}]\n\n'
-                    "如果没有值得记住的信息，只输出空数组：[]\n"
-                    "只输出 JSON，不要输出任何其他内容。"
-                )
-                extraction_messages = [
-                    {"role": "system", "content": "你是记忆提取助手，只输出 JSON。"},
-                    {"role": "user", "content": extraction_prompt},
-                ]
-                result = request_chat_completion(
-                    provider,
-                    extraction_messages,
-                    stream=False,
-                    temperature=0.1,
-                    timeout=20,
-                )
-                raw = extract_text_content(result).strip()
-                if raw.startswith("```"):
-                    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-                    raw = re.sub(r"\s*```$", "", raw)
-                items = json.loads(raw)
-                if not isinstance(items, list):
-                    return
-                for item in items[:5]:
-                    if not isinstance(item, dict):
-                        continue
-                    key = str(item.get("key", "")).strip()
-                    content = str(item.get("content", "")).strip()
-                    if not key or not content:
-                        continue
-                    category = str(item.get("category", "other")).strip() or "other"
-                    importance = float(item.get("importance", 0.5) or 0.5)
-                    importance = max(0.0, min(1.0, importance))
-                    memory_id = f"auto_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
-                    self.memory_store.upsert_memory(
-                        memory_id=memory_id,
-                        key=key,
-                        content=content,
-                        category=category,
-                        importance=importance,
-                        session_id=session_id,
-                    )
-            except Exception:
-                pass
-
-        thread = threading.Thread(target=_run, name="memory-extraction", daemon=True)
-        thread.start()
-
-    def _run_memory_digest(self) -> None:
+    def _run_memory_digest(self, profile_id: str = "", session_id: str = "") -> None:
         provider = self._preferred_extraction_provider()
         if provider is None:
             return
-        recent_events = self.memory_store.list_events(limit=50)
-        if not recent_events:
+        day_start, day_end = self._local_day_bounds()
+        log_id = self._daily_log_memory_id(profile_id or "local-user", day_start)
+        daily_log = self.memory_store.get_memory(log_id)
+        if daily_log is None:
             return
-        chat_events = [
-            e
-            for e in recent_events
-            if e.get("event_type") in ("chat_respond", "chat_complete", "chat_stream")
+        existing_refresh_key = (
+            f"digest::{(profile_id or 'local-user')}::{day_start.strftime('%Y-%m-%d')}"
+        )
+        existing_refresh = self.memory_store.search(
+            existing_refresh_key,
+            limit=1,
+            memory_kind="long_term",
+        )
+        if existing_refresh:
+            return
+
+        existing_memories = self.memory_store.list_memories(
+            limit=80, memory_kind="long_term"
+        )
+        existing_blocks = [
+            f"- [{item.category}] {item.key}: {item.content[:200]}"
+            for item in existing_memories
+            if item.category != "memory_refresh"
         ]
-        if not chat_events:
-            return
-
-        summaries = []
-        for event in reversed(chat_events[:20]):
-            summary = self._summarize_event(event)
-            if summary:
-                summaries.append(summary)
-        if not summaries:
-            return
-
-        existing_memories = self.memory_store.list_memories(limit=30)
-        existing_keys = {m.key for m in existing_memories}
 
         digest_prompt = (
-            "你是记忆整理助手。根据以下近期对话事件，提取值得长期保存的记忆。\n"
-            "注意不要重复已有记忆。\n\n"
-            "已有记忆关键词：\n"
-            + "\n".join(f"- {k}" for k in list(existing_keys)[:20])
-            + "\n\n近期对话事件：\n"
-            + "\n".join(f"- {s}" for s in summaries)
-            + "\n\n请提取新的值得记住的信息，用以下 JSON 数组格式输出：\n"
-            '[{"key": "简短标题", "content": "详细内容", "category": "preference|promise|event|anniversary|emotion|habit|boundary|other", "importance": 0.5}]\n\n'
-            "如果没有新的值得记住的信息，只输出空数组：[]\n"
-            "只输出 JSON，不要输出任何其他内容。"
+            "你是长期记忆整理助手。现在只能基于‘今日聊天日志’来更新长期记忆。\n"
+            "请把已有长期记忆视为可修改的事实表，不要逐条照抄日志，不要生成日志型条目。\n"
+            "只有以下类型允许进入长期记忆：世界书设定、稳定喜好、重要关系事实、长期边界、约定/承诺、纪念日、持续习惯、重要阶段事件。\n"
+            "如果日志里没有值得长期保留的信息，就返回空数组。\n\n"
+            "现有长期记忆：\n"
+            + ("\n".join(existing_blocks[:40]) if existing_blocks else "- 暂无")
+            + "\n\n今日聊天日志：\n"
+            + daily_log.content[:5000]
+            + "\n\n"
+            "输出 JSON 数组。每一项格式如下：\n"
+            '[{"id": "existing_or_empty", "key": "简短标题", "content": "更新后的完整内容", "category": "preference|promise|event|anniversary|emotion|habit|boundary|other", "importance": 0.5}]\n\n'
+            "规则：\n"
+            "1. 如果是更新已有长期记忆，必须填已有记忆 id。\n"
+            "2. 如果是新增长期记忆，id 留空字符串。\n"
+            "3. 不要输出 daily_log / log / summary 类型。\n"
+            "4. 只输出 JSON，不要输出其他解释。"
         )
         try:
             result = request_chat_completion(
@@ -1591,28 +1696,52 @@ class GatewayApp:
             items = json.loads(raw)
             if not isinstance(items, list):
                 return
+            updated_any = False
+            existing_by_id = {item.id: item for item in existing_memories}
             for item in items[:10]:
                 if not isinstance(item, dict):
                     continue
+                target_id = str(item.get("id", "") or "").strip()
                 key = str(item.get("key", "")).strip()
                 content = str(item.get("content", "")).strip()
                 if not key or not content:
                     continue
-                if key in existing_keys:
-                    continue
                 category = str(item.get("category", "other")).strip() or "other"
                 importance = float(item.get("importance", 0.5) or 0.5)
                 importance = max(0.0, min(1.0, importance))
-                memory_id = f"digest_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+                if category == "daily_log":
+                    continue
+                memory_id = (
+                    target_id
+                    or f"digest_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+                )
+                if target_id and target_id not in existing_by_id:
+                    continue
                 self.memory_store.upsert_memory(
                     memory_id=memory_id,
                     key=key,
                     content=content,
+                    memory_kind="long_term",
                     category=category,
                     importance=importance,
+                    session_id=session_id,
                 )
+                updated_any = True
         except Exception:
             pass
+        else:
+            if updated_any:
+                self.memory_store.upsert_memory(
+                    memory_id=f"refresh_{day_start.strftime('%Y%m%d')}_{profile_id or 'local-user'}",
+                    key=existing_refresh_key,
+                    content=f"已在 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 根据今日日志刷新长期记忆。",
+                    memory_kind="long_term",
+                    category="memory_refresh",
+                    importance=0.0,
+                    session_id=self._daily_log_session_ref(
+                        profile_id or "local-user", day_start
+                    ),
+                )
         self._refresh_active_memory()
         self._write_text_file(self._core_memory_file(), self._render_core_profile())
 
@@ -1739,6 +1868,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/memories":
                 category = parse_qs(parsed.query).get("category", [""])[0]
                 self._json(HTTPStatus.OK, app.list_memories_grouped(category))
+                return
+            if parsed.path == "/api/logs":
+                query = parse_qs(parsed.query)
+                profile_id = query.get("profile_id", [""])[0]
+                session_id = query.get("session_id", [""])[0]
+                limit = int(query.get("limit", ["60"])[0] or "60")
+                self._json(
+                    HTTPStatus.OK,
+                    app.list_daily_logs_payload(profile_id, session_id, limit),
+                )
                 return
             if parsed.path == "/api/sessions":
                 profile_id = parse_qs(parsed.query).get("profile_id", [""])[0]
