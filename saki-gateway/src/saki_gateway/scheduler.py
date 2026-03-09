@@ -10,6 +10,7 @@ from .runtime_store import RuntimeStore
 
 ReminderCallback = Callable[[str], None]
 ProactiveCallback = Callable[[str], None]
+DigestCallback = Callable[[], None]
 
 
 class GatewayScheduler:
@@ -19,15 +20,18 @@ class GatewayScheduler:
         config_getter: Callable[[], SchedulerConfig],
         on_due_reminder: ReminderCallback,
         on_proactive_ping: ProactiveCallback,
+        on_memory_digest: Optional[DigestCallback] = None,
     ):
         self.store = store
         self.config_getter = config_getter
         self.on_due_reminder = on_due_reminder
         self.on_proactive_ping = on_proactive_ping
+        self.on_memory_digest = on_memory_digest
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._last_error = ""
         self._tick_count = 0
+        self._last_digest_hour: int = -1
 
     def start(self) -> None:
         config = self.config_getter()
@@ -37,13 +41,19 @@ class GatewayScheduler:
             return
         self._thread = None
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_forever, name="gateway-scheduler", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run_forever, name="gateway-scheduler", daemon=True
+        )
         self._thread.start()
 
     def stop(self) -> None:
         self._stop_event.set()
         thread = self._thread
-        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+        if (
+            thread is not None
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
             thread.join(timeout=max(self.config_getter().poll_interval_seconds, 3) + 1)
         if self._thread is thread:
             self._thread = None
@@ -76,6 +86,7 @@ class GatewayScheduler:
     def _tick(self) -> None:
         self._deliver_due_reminders()
         self._send_proactive_pings()
+        self._run_memory_digest()
 
     def _deliver_due_reminders(self) -> None:
         due = self.store.list_due_reminders(limit=10)
@@ -98,3 +109,17 @@ class GatewayScheduler:
             profile_id = str(candidate.get("profile_id", ""))
             if profile_id:
                 self.on_proactive_ping(profile_id)
+
+    def _run_memory_digest(self) -> None:
+        if self.on_memory_digest is None:
+            return
+        current_hour = datetime.now().hour
+        if current_hour == self._last_digest_hour:
+            return
+        if current_hour not in (3, 9, 15, 21):
+            return
+        self._last_digest_hour = current_hour
+        try:
+            self.on_memory_digest()
+        except Exception:
+            pass
