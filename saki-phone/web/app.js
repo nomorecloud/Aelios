@@ -23,6 +23,7 @@ class SakiPhoneApp {
     this.healthData = null;
     this.currentMemoryView = 'long_term';
     this.currentMemoryCategory = '';
+    this.expandedLogIds = new Set();
     this.init();
   }
 
@@ -475,13 +476,18 @@ class SakiPhoneApp {
         }
 
         contentEl.innerHTML = `<div class="memory-log-list">${items.map(m => `
-          <div class="memory-card memory-log-card">
-            <div class="memory-card-header">
-              <span class="memory-date">${m.date || ''}</span>
-              <span class="memory-log-badge">只读日志</span>
+          <div class="memory-card memory-log-card ${this.expandedLogIds.has(String(m.id || '')) ? 'expanded' : ''}">
+            <div class="memory-card-header memory-log-header" onclick="app.toggleLogCard('${this.escAttr(String(m.id || ''))}')">
+              <div class="memory-log-main">
+                <span class="memory-date">${m.date || ''}</span>
+                <div class="memory-title">${this.escapeHtml(m.title || m.key || '未命名日志')}</div>
+              </div>
+              <div class="memory-log-side">
+                <span class="memory-log-badge">只读日志</span>
+                <span class="memory-log-toggle-label">${this.expandedLogIds.has(String(m.id || '')) ? '收起' : '展开'}</span>
+              </div>
             </div>
-            <div class="memory-card-body">
-              <div class="memory-title">${this.escapeHtml(m.title || m.key || '')}</div>
+            <div class="memory-card-body memory-log-body ${this.expandedLogIds.has(String(m.id || '')) ? 'expanded' : ''}">
               <div class="memory-log-content">${this.escapeHtml(m.content || '')}</div>
             </div>
           </div>
@@ -573,6 +579,17 @@ class SakiPhoneApp {
   filterMemoryCategory(key) {
     this.currentMemoryView = 'long_term';
     this.currentMemoryCategory = key;
+    this.renderMemories();
+  }
+
+  toggleLogCard(id) {
+    const key = String(id || '').trim();
+    if (!key) return;
+    if (this.expandedLogIds.has(key)) {
+      this.expandedLogIds.delete(key);
+    } else {
+      this.expandedLogIds.add(key);
+    }
     this.renderMemories();
   }
 
@@ -684,6 +701,19 @@ class SakiPhoneApp {
       this.renderMemories();
     } catch (err) {
       this.showToast(`删除失败: ${err.message}`, 'error');
+    }
+  }
+
+  async clearAllMemories() {
+    if (!confirm('确定一键清空所有长期记忆和今日日志吗？此操作不可恢复。')) return;
+    try {
+      const res = await this.apiFetch('/api/memories', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to clear memories');
+      this.expandedLogIds.clear();
+      this.showToast('记忆和日志已清空', 'success');
+      this.renderMemories();
+    } catch (err) {
+      this.showToast(`清空失败: ${err.message}`, 'error');
     }
   }
 
