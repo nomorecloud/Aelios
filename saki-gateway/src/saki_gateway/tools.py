@@ -92,7 +92,9 @@ def _fetch_github_repo_context(url: str) -> Optional[Dict[str, Any]]:
         readme_meta = _get_json(f"{api_base}/readme")
         download_url = str(readme_meta.get("download_url", "") or "")
         if download_url:
-            req = urllib.request.Request(download_url, headers={"User-Agent": "saki-gateway/0.1"})
+            req = urllib.request.Request(
+                download_url, headers={"User-Agent": "saki-gateway/0.1"}
+            )
             with urllib.request.urlopen(req, timeout=15) as response:
                 readme_text = response.read().decode("utf-8", errors="replace")
     except Exception:
@@ -102,7 +104,11 @@ def _fetch_github_repo_context(url: str) -> Optional[Dict[str, Any]]:
         tree = _get_json(f"{api_base}/contents")
         if isinstance(tree, list):
             entries = tree[:20]
-            file_names = [str(item.get("name", "") or "") for item in entries if isinstance(item, dict)]
+            file_names = [
+                str(item.get("name", "") or "")
+                for item in entries
+                if isinstance(item, dict)
+            ]
     except Exception:
         file_names = []
     description = str(repo_meta.get("description", "") or "")
@@ -146,14 +152,18 @@ def _fetch_image_as_data_url(url: str) -> str:
     return f"data:{content_type};base64,{encoded}"
 
 
-def _local_image_as_data_url(image_path: str, workspace_root: Optional[Path] = None) -> str:
+def _local_image_as_data_url(
+    image_path: str, workspace_root: Optional[Path] = None
+) -> str:
     target = Path(image_path)
     if not target.is_absolute():
         base = workspace_root or Path.cwd()
         target = (base / target).resolve()
     else:
         target = target.resolve()
-    if workspace_root is not None and not str(target).startswith(str(workspace_root.resolve())):
+    if workspace_root is not None and not str(target).startswith(
+        str(workspace_root.resolve())
+    ):
         raise ValueError("image path escapes workspace")
     if not target.exists() or not target.is_file():
         raise ValueError("image path does not exist")
@@ -163,7 +173,9 @@ def _local_image_as_data_url(image_path: str, workspace_root: Optional[Path] = N
     return f"data:{content_type or 'application/octet-stream'};base64,{encoded}"
 
 
-def _image_source_as_data_url(image_source: str, workspace_root: Optional[Path] = None) -> str:
+def _image_source_as_data_url(
+    image_source: str, workspace_root: Optional[Path] = None
+) -> str:
     parsed = urllib.parse.urlparse(image_source)
     if parsed.scheme == "data":
         return image_source
@@ -182,7 +194,11 @@ def _allowed_workspace_root(workspace_root: Optional[Path]) -> Optional[Path]:
 
 
 def _provider_name(provider: Any) -> str:
-    return str(getattr(provider, "label", "") or getattr(provider, "backend_type", "") or "unknown")
+    return str(
+        getattr(provider, "label", "")
+        or getattr(provider, "backend_type", "")
+        or "unknown"
+    )
 
 
 def _provider_ready(provider: Any) -> bool:
@@ -220,7 +236,13 @@ def _request_with_fallback(
     attempts: List[Dict[str, str]] = []
     for route_name, provider in _provider_route(config, purpose):
         if not _provider_ready(provider):
-            attempts.append({"route": route_name, "provider": _provider_name(provider), "status": "skipped"})
+            attempts.append(
+                {
+                    "route": route_name,
+                    "provider": _provider_name(provider),
+                    "status": "skipped",
+                }
+            )
             continue
         try:
             response = request_chat_completion(
@@ -248,7 +270,9 @@ def _request_with_fallback(
     raise ValueError(f"no available provider for {purpose}; attempts={attempts}")
 
 
-def prepare_shared_link_context(config: AppConfig, url: str, user_note: str = "") -> Dict[str, Any]:
+def prepare_shared_link_context(
+    config: AppConfig, url: str, user_note: str = ""
+) -> Dict[str, Any]:
     fetched = _fetch_url_content(url)
     context_text = fetched["excerpt"]
     route_used = "fetch_only"
@@ -300,7 +324,9 @@ def prepare_image_context(
     route_used = "unavailable"
     provider_used = "none"
     try:
-        image_data_url = _image_source_as_data_url(image_url, _allowed_workspace_root(workspace_root))
+        image_data_url = _image_source_as_data_url(
+            image_url, _allowed_workspace_root(workspace_root)
+        )
         routed = _request_with_fallback(
             config,
             "image",
@@ -398,10 +424,17 @@ def build_default_registry(
         file_path = str(args.get("path", "")).strip()
         if not file_path:
             raise ValueError("path is required")
-        target = (workspace_root / file_path).resolve() if not Path(file_path).is_absolute() else Path(file_path)
+        target = (
+            (workspace_root / file_path).resolve()
+            if not Path(file_path).is_absolute()
+            else Path(file_path)
+        )
         if not str(target).startswith(str(workspace_root.resolve())):
             raise ValueError("path escapes workspace")
-        return {"path": str(target), "content": target.read_text(encoding="utf-8")[:12000]}
+        return {
+            "path": str(target),
+            "content": target.read_text(encoding="utf-8")[:12000],
+        }
 
     def search_web(args: Dict[str, Any]) -> Dict[str, Any]:
         query = str(args.get("query", "")).strip()
@@ -449,6 +482,35 @@ def build_default_registry(
             ],
         }
 
+    def save_memory(args: Dict[str, Any]) -> Dict[str, Any]:
+        if memory_store is None:
+            raise ValueError("memory store is not available")
+        key = str(args.get("key", "")).strip()
+        content = str(args.get("content", "")).strip()
+        if not key or not content:
+            raise ValueError("key and content are required")
+        category = str(args.get("category", "other")).strip() or "other"
+        importance = float(args.get("importance", 0.5) or 0.5)
+        importance = max(0.0, min(1.0, importance))
+        memory_id = args.get("id", "").strip() if args.get("id") else ""
+        if not memory_id:
+            memory_id = f"mem_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+        record = memory_store.upsert_memory(
+            memory_id=memory_id,
+            key=key,
+            content=content,
+            category=category,
+            importance=importance,
+        )
+        return {
+            "ok": True,
+            "id": record.id,
+            "key": record.key,
+            "content": record.content,
+            "category": record.category,
+            "importance": record.importance,
+        }
+
     def create_reminder(args: Dict[str, Any]) -> Dict[str, Any]:
         if runtime_store is None:
             raise ValueError("runtime store is not available")
@@ -465,10 +527,20 @@ def build_default_registry(
             if minutes <= 0:
                 raise ValueError("trigger_at or minutes is required")
             trigger_at = (datetime.utcnow() + timedelta(minutes=minutes)).isoformat()
-        for existing in runtime_store.list_reminders(profile_id=profile_id, status="pending", limit=100):
-            existing_minutes = int((existing.metadata or {}).get("requested_minutes", 0) or 0)
-            same_relative_reminder = minutes > 0 and existing.content == content and existing_minutes == minutes
-            same_absolute_reminder = existing.content == content and existing.trigger_at == trigger_at
+        for existing in runtime_store.list_reminders(
+            profile_id=profile_id, status="pending", limit=100
+        ):
+            existing_minutes = int(
+                (existing.metadata or {}).get("requested_minutes", 0) or 0
+            )
+            same_relative_reminder = (
+                minutes > 0
+                and existing.content == content
+                and existing_minutes == minutes
+            )
+            same_absolute_reminder = (
+                existing.content == content and existing.trigger_at == trigger_at
+            )
             if same_relative_reminder or same_absolute_reminder:
                 return {
                     "reminder_id": existing.reminder_id,
@@ -522,11 +594,18 @@ def build_default_registry(
         }
 
     def analyze_image(args: Dict[str, Any]) -> Dict[str, Any]:
-        image_url = str(args.get("url", "") or args.get("image_url", "") or args.get("path", "")).strip()
+        image_url = str(
+            args.get("url", "") or args.get("image_url", "") or args.get("path", "")
+        ).strip()
         user_note = str(args.get("note", "")).strip()
         if not image_url:
             raise ValueError("url or path is required")
-        prepared = prepare_image_context(config_getter(), image_url, user_note, _allowed_workspace_root(workspace_root))
+        prepared = prepare_image_context(
+            config_getter(),
+            image_url,
+            user_note,
+            _allowed_workspace_root(workspace_root),
+        )
         return {
             "url": image_url,
             "available": True,
@@ -548,7 +627,11 @@ def build_default_registry(
         ToolSpec(
             tool_id="fetch_url",
             description="Fetch a web page and return cleaned text content.",
-            schema={"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
+            schema={
+                "type": "object",
+                "properties": {"url": {"type": "string"}},
+                "required": ["url"],
+            },
             enabled=True,
             execute=fetch_url,
         )
@@ -557,7 +640,11 @@ def build_default_registry(
         ToolSpec(
             tool_id="read_file",
             description="Read a local workspace file.",
-            schema={"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            schema={
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"],
+            },
             enabled=True,
             execute=read_file,
         )
@@ -566,7 +653,11 @@ def build_default_registry(
         ToolSpec(
             tool_id="search_web",
             description="Search the web through a configured search provider.",
-            schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+            schema={
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
             enabled=True,
             execute=search_web,
         )
@@ -585,6 +676,50 @@ def build_default_registry(
             },
             enabled=memory_store is not None,
             execute=search_memory,
+        )
+    )
+    registry.register(
+        ToolSpec(
+            tool_id="save_memory",
+            description="Save or update a memory record. Use this to persist important user information such as preferences, promises, events, anniversaries, habits, or any fact worth remembering long-term.",
+            schema={
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Short title or label for the memory",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Detailed content of the memory",
+                    },
+                    "category": {
+                        "type": "string",
+                        "enum": [
+                            "preference",
+                            "promise",
+                            "event",
+                            "anniversary",
+                            "emotion",
+                            "habit",
+                            "boundary",
+                            "other",
+                        ],
+                        "description": "Category of the memory",
+                    },
+                    "importance": {
+                        "type": "number",
+                        "description": "Importance from 0.0 to 1.0 (default 0.5)",
+                    },
+                    "id": {
+                        "type": "string",
+                        "description": "Optional: existing memory ID to update instead of creating new",
+                    },
+                },
+                "required": ["key", "content"],
+            },
+            enabled=memory_store is not None,
+            execute=save_memory,
         )
     )
     registry.register(
