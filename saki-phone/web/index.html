@@ -437,6 +437,30 @@ svg.icon, svg.icon-sm, svg.icon-lg, svg.icon-xl { fill: none; stroke: currentCol
   padding: 6px 10px; border-top: 1px solid rgba(255,255,255,0.3);
 }
 .memory-date { font-size: 10px; color: var(--secondary-text); }
+.memory-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.memory-log-card {
+  background: rgba(255,255,255,0.42);
+}
+.memory-log-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(214,140,158,0.18);
+  color: var(--deep-mauve);
+  font-size: 10px;
+  font-weight: 700;
+}
+.memory-log-content {
+  font-size: 12px;
+  color: var(--primary-text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
 
 /* AI Memories */
 .ai-memory-item {
@@ -900,7 +924,7 @@ svg.icon, svg.icon-sm, svg.icon-lg, svg.icon-xl { fill: none; stroke: currentCol
             <svg class="icon"><use href="#i-back"/></svg>
           </button>
           <span class="page-title">Memory</span>
-          <button class="action-btn" onclick="app.showAddMemoryModal()">
+          <button class="action-btn" id="memory-add-btn" onclick="app.showAddMemoryModal()">
             <svg class="icon"><use href="#i-plus"/></svg>
           </button>
         </div>

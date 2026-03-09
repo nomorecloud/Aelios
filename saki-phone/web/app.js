@@ -21,6 +21,7 @@ class SakiPhoneApp {
     this.isTyping = false;
     this.gatewayConfig = null;
     this.healthData = null;
+    this.currentMemoryView = 'long_term';
     this.currentMemoryCategory = '';
     this.init();
   }
@@ -447,6 +448,47 @@ class SakiPhoneApp {
     contentEl.innerHTML = '<div class="empty-text">加载中...</div>';
 
     try {
+      if (this.currentMemoryView === 'logs') {
+        const res = await fetch('/api/logs');
+        if (!res.ok) throw new Error('Failed to load logs');
+        const data = await res.json();
+        const items = data.items || [];
+
+        tabsEl.innerHTML = `
+          <div class="memory-tab ${this.currentMemoryView === 'long_term' ? 'active' : ''}" onclick="app.switchMemoryView('long_term')">
+            长期记忆
+          </div>
+          <div class="memory-tab ${this.currentMemoryView === 'logs' ? 'active' : ''}" onclick="app.switchMemoryView('logs')">
+            今日日志 <span class="tab-count">${items.length}</span>
+          </div>
+        `;
+
+        if (items.length === 0) {
+          contentEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">${svgIcon('clock', 'icon-xl')}</div>
+              <p>今天还没有生成日志</p>
+              <div class="empty-text">聊天消息达到 20 条后，会更新同一天的那一条日志。</div>
+            </div>
+          `;
+          return;
+        }
+
+        contentEl.innerHTML = `<div class="memory-log-list">${items.map(m => `
+          <div class="memory-card memory-log-card">
+            <div class="memory-card-header">
+              <span class="memory-date">${m.date || ''}</span>
+              <span class="memory-log-badge">只读日志</span>
+            </div>
+            <div class="memory-card-body">
+              <div class="memory-title">${this.escapeHtml(m.title || m.key || '')}</div>
+              <div class="memory-log-content">${this.escapeHtml(m.content || '')}</div>
+            </div>
+          </div>
+        `).join('')}</div>`;
+        return;
+      }
+
       const res = await fetch('/api/memories');
       if (!res.ok) throw new Error('Failed to load memories');
       const data = await res.json();
@@ -454,26 +496,33 @@ class SakiPhoneApp {
       const items = data.items || [];
       const stats = data.stats || {};
 
-      // Render tabs
       const categories = [
         { key: '', label: '全部', count: items.length },
         { key: 'anniversary', label: '纪念日', count: stats.anniversary || 0 },
         { key: 'preference', label: '喜好', count: stats.preference || 0 },
         { key: 'promise', label: '约定', count: stats.promise || 0 },
-        { key: 'story', label: '故事', count: stats.story || 0 },
-        { key: 'password', label: '密码', count: stats.password || 0 },
-        { key: 'travel', label: '旅行', count: stats.travel || 0 },
+        { key: 'event', label: '事件', count: stats.event || 0 },
+        { key: 'emotion', label: '情绪', count: stats.emotion || 0 },
+        { key: 'habit', label: '习惯', count: stats.habit || 0 },
+        { key: 'boundary', label: '边界', count: stats.boundary || 0 },
         { key: 'other', label: '其他', count: stats.other || 0 },
       ];
 
-      tabsEl.innerHTML = categories.map(c => `
-        <div class="memory-tab ${this.currentMemoryCategory === c.key ? 'active' : ''}"
-             onclick="app.filterMemoryCategory('${c.key}')">
-          ${c.label} <span class="tab-count">${c.count}</span>
+      tabsEl.innerHTML = `
+        <div class="memory-tab ${this.currentMemoryView === 'long_term' ? 'active' : ''}" onclick="app.switchMemoryView('long_term')">
+          长期记忆 <span class="tab-count">${items.length}</span>
         </div>
-      `).join('');
+        <div class="memory-tab ${this.currentMemoryView === 'logs' ? 'active' : ''}" onclick="app.switchMemoryView('logs')">
+          今日日志
+        </div>
+        ${categories.map(c => `
+          <div class="memory-tab ${this.currentMemoryCategory === c.key ? 'active' : ''}"
+               onclick="app.filterMemoryCategory('${c.key}')">
+            ${c.label} <span class="tab-count">${c.count}</span>
+          </div>
+        `).join('')}
+      `;
 
-      // Filter items
       const filtered = this.currentMemoryCategory
         ? items.filter(m => m.category === this.currentMemoryCategory)
         : items;
@@ -482,7 +531,7 @@ class SakiPhoneApp {
         contentEl.innerHTML = `
           <div class="empty-state">
             <div class="empty-icon">${svgIcon('memory', 'icon-xl')}</div>
-            <p>暂无记忆</p>
+            <p>暂无长期记忆</p>
             <button class="btn btn-primary btn-sm" onclick="app.showAddMemoryModal()">添加记忆</button>
           </div>
         `;
@@ -509,7 +558,20 @@ class SakiPhoneApp {
     }
   }
 
+  switchMemoryView(view) {
+    this.currentMemoryView = view;
+    if (view === 'logs') {
+      this.currentMemoryCategory = '';
+    }
+    const addBtn = document.getElementById('memory-add-btn');
+    if (addBtn) {
+      addBtn.style.display = view === 'logs' ? 'none' : 'inline-flex';
+    }
+    this.renderMemories();
+  }
+
   filterMemoryCategory(key) {
+    this.currentMemoryView = 'long_term';
     this.currentMemoryCategory = key;
     this.renderMemories();
   }
@@ -517,6 +579,11 @@ class SakiPhoneApp {
   async searchMemories(query) {
     const contentEl = document.getElementById('memory-content');
     if (!contentEl) return;
+
+    if (this.currentMemoryView === 'logs') {
+      this.renderMemories();
+      return;
+    }
 
     try {
       const res = await fetch(`/api/memories/search?q=${encodeURIComponent(query)}`);
