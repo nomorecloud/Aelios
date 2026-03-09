@@ -248,6 +248,22 @@ class MemoryStore:
             self.conn.commit()
         return cursor.rowcount > 0
 
+    def delete_memories(self, memory_kinds: Optional[Iterable[str]] = None) -> int:
+        with self._lock:
+            if memory_kinds is None:
+                cursor = self.conn.execute("DELETE FROM memories")
+            else:
+                kinds = [str(kind) for kind in memory_kinds if str(kind).strip()]
+                if not kinds:
+                    return 0
+                placeholders = ", ".join("?" for _ in kinds)
+                cursor = self.conn.execute(
+                    f"DELETE FROM memories WHERE memory_kind IN ({placeholders})",
+                    tuple(kinds),
+                )
+            self.conn.commit()
+        return max(cursor.rowcount, 0)
+
     def search(
         self,
         query: str,

@@ -1372,6 +1372,15 @@ class GatewayApp:
             "category": existing.category,
         }
 
+    def clear_panel_memories(self) -> Dict[str, Any]:
+        deleted = self.memory_store.delete_memories(["long_term", "daily_log"])
+        self._ensure_context_files(refresh=True)
+        return {
+            "success": True,
+            "deleted": deleted,
+            "memory_kinds": ["long_term", "daily_log"],
+        }
+
     def get_context_payload(self) -> Dict[str, Any]:
         return {
             "core_profile": self._read_text_file(self._core_memory_file()),
@@ -2110,6 +2119,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             parsed = urlparse(self.path)
             app = self._app()
+            if parsed.path == "/api/memories":
+                self._json(HTTPStatus.OK, app.clear_panel_memories())
+                return
             if parsed.path.startswith("/api/memories/"):
                 memory_id = parsed.path.rsplit("/", 1)[-1]
                 self._json(HTTPStatus.OK, app.delete_panel_memory(memory_id))
