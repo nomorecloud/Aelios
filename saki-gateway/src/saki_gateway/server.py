@@ -92,6 +92,7 @@ class GatewayApp:
         )
         self._ensure_context_files(refresh=True)
         self.feishu_channel = self._build_feishu_channel()
+        self.qqbot_channel = self._build_qqbot_channel()
         self.napcat_channel = self._build_napcat_channel()
         self.scheduler = GatewayScheduler(
             self.runtime_store,
@@ -127,6 +128,9 @@ class GatewayApp:
             "channels": {
                 "feishu": self.feishu_channel.status()
                 if self.feishu_channel
+                else {"enabled": False, "ready": False},
+                "qqbot": self.qqbot_channel.status()
+                if self.qqbot_channel
                 else {"enabled": False, "ready": False},
                 "qq": self.napcat_channel.status()
                 if self.napcat_channel
@@ -242,6 +246,8 @@ class GatewayApp:
     def start_channels(self) -> None:
         if self.feishu_channel is not None:
             self.feishu_channel.start(self.handle_feishu_message)
+        if self.qqbot_channel is not None:
+            self.qqbot_channel.start(self.handle_qqbot_message)
         if self.napcat_channel is not None:
             self.napcat_channel.start(self.handle_napcat_message)
         self.scheduler.start()
@@ -249,6 +255,8 @@ class GatewayApp:
     def shutdown(self) -> None:
         if self.feishu_channel is not None:
             self.feishu_channel.stop()
+        if self.qqbot_channel is not None:
+            self.qqbot_channel.stop()
         if self.napcat_channel is not None:
             self.napcat_channel.stop()
         self.scheduler.stop()
@@ -257,14 +265,19 @@ class GatewayApp:
         self.scheduler.stop()
         if self.feishu_channel is not None:
             self.feishu_channel.stop()
+        if self.qqbot_channel is not None:
+            self.qqbot_channel.stop()
         if self.napcat_channel is not None:
             self.napcat_channel.stop()
         config = self.config_store.update(payload)
         self._ensure_context_files(refresh=True)
         self.feishu_channel = self._build_feishu_channel()
+        self.qqbot_channel = self._build_qqbot_channel()
         self.napcat_channel = self._build_napcat_channel()
         if self.feishu_channel is not None:
             self.feishu_channel.start(self.handle_feishu_message)
+        if self.qqbot_channel is not None:
+            self.qqbot_channel.start(self.handle_qqbot_message)
         if self.napcat_channel is not None:
             self.napcat_channel.start(self.handle_napcat_message)
         self.scheduler.start()
@@ -856,6 +869,42 @@ class GatewayApp:
             },
         )
 
+    def handle_qqbot_message(self, inbound: Dict[str, Any]) -> Iterable[str]:
+        prompt = str(inbound.get("text", "") or "").strip()
+        messages = [{"role": "user", "content": prompt}] if prompt else []
+        attachments = inbound.get("attachments") or []
+        if not messages and attachments:
+            messages = [{"role": "user", "content": "[用户发送了图片或文件]"}]
+        if not messages and not attachments:
+            return []
+        profile_id = self._profile_id_for_inbound(inbound)
+        _, session = self._resolve_request_session(
+            {
+                "profile_id": profile_id,
+                "channel": "qqbot",
+                "channel_user_id": inbound.get("user_id", ""),
+                "chat_id": inbound.get("group_id", ""),
+                "thread_id": "",
+            }
+        )
+        return self.stream_chat_reply(
+            messages=messages,
+            attachments=attachments,
+            profile_id=profile_id,
+            session_id=session.session_id,
+            channel="qqbot",
+            temperature=0.7,
+            event_type="qqbot_chat_respond",
+            event_payload={
+                "channel": "qqbot",
+                "user_id": inbound.get("user_id", ""),
+                "group_id": inbound.get("group_id", ""),
+                "message_type": inbound.get("message_type", "private"),
+                "message_id": inbound.get("message_id", ""),
+                "attachments": attachments,
+            },
+        )
+
     def _build_feishu_channel(self):
         channels = self.config_store.config.channels
         if not channels.feishu_enabled:
@@ -890,6 +939,22 @@ class GatewayApp:
                 base_url=channels.napcat_base_url,
                 access_token=channels.napcat_access_token,
                 enabled=channels.napcat_enabled,
+            )
+        )
+
+    def _build_qqbot_channel(self):
+        channels = self.config_store.config.channels
+        if not channels.qqbot_enabled:
+            return None
+        if not channels.qqbot_app_id or not channels.qqbot_token:
+            return None
+        from .channels.qqbot import QQBotChannel, QQBotChannelConfig
+
+        return QQBotChannel(
+            QQBotChannelConfig(
+                app_id=channels.qqbot_app_id,
+                token=channels.qqbot_token,
+                enabled=channels.qqbot_enabled,
             )
         )
 
@@ -1266,6 +1331,18 @@ class GatewayApp:
                 open_id, outbound_content, chat_id=chat_id, chat_type=chat_type
             )
             delivered = True
+        elif channel == "qqbot" and self.qqbot_channel is not None:
+            user_id = str(profile.get("channel_user_id", "") or "")
+            group_id = str(profile.get("chat_id", "") or "")
+            message_type = "group" if group_id else "private"
+            self.qqbot_channel.send_text(
+                user_id,
+                outbound_content,
+                group_id=group_id,
+                message_type=message_type,
+                attachments=self._extract_outbound_attachments(content),
+            )
+            delivered = True
         elif channel == "qq" and self.napcat_channel is not None:
             user_id = str(profile.get("channel_user_id", "") or "")
             group_id = str(profile.get("chat_id", "") or "")
@@ -1296,6 +1373,27 @@ class GatewayApp:
             "note": note,
             "channel": channel,
         }
+
+    def _extract_outbound_attachments(self, raw_content: str) -> list[Dict[str, Any]]:
+        text = str(raw_content or "")
+        attachments: list[Dict[str, Any]] = []
+        image_matches = re.findall(
+            r"<qqimg>(.*?)</(?:qqimg|img)>", text, flags=re.I | re.S
+        )
+        file_matches = re.findall(r"<qqfile>(.*?)</qqfile>", text, flags=re.I | re.S)
+        for item in image_matches:
+            value = item.strip()
+            if value:
+                attachments.append(
+                    {"type": "image", "url": value, "name": Path(value).name}
+                )
+        for item in file_matches:
+            value = item.strip()
+            if value:
+                attachments.append(
+                    {"type": "file", "url": value, "name": Path(value).name}
+                )
+        return attachments
 
     def _prepare_outbound_message(
         self, profile_id: str, content: str, source: str
@@ -1470,11 +1568,49 @@ class GatewayApp:
         self._refresh_active_memory()
 
     def _send_idle_proactive_ping(self, profile_id: str) -> None:
-        persona = self.config_store.config.persona
-        content = f"{persona.call_user}，我刚刚想起你了。最近还好吗？如果你愿意，也可以和我说说今天发生了什么。"
+        profile = self.runtime_store.profile_state(profile_id)
+        if not profile:
+            return
+        scheduler = self.config_store.config.scheduler
+        last_interaction_at = str(profile.get("last_interaction_at", "") or "").strip()
+        idle_text = "有一阵子"
+        idle_minutes = 0
+        if last_interaction_at:
+            try:
+                idle_delta = datetime.utcnow() - datetime.fromisoformat(
+                    last_interaction_at
+                )
+                idle_minutes = max(int(idle_delta.total_seconds() // 60), 0)
+                idle_text = self._format_idle_duration(idle_minutes)
+            except ValueError:
+                idle_text = "有一阵子"
+        current_hour = datetime.now().hour
+        content = (
+            "这是一次白天时段的主动消息判断。"
+            f"现在是本地时间 {current_hour:02d}:00，处于允许主动消息的白天窗口"
+            f"（{scheduler.proactive_day_start_hour}:00-{scheduler.proactive_day_end_hour}:00）。"
+            f"距离用户上次发来消息已经约 {idle_text}"
+            f"（约 {idle_minutes} 分钟）。"
+            "请基于你和对方最近的上下文，主动发一条自然、简短、像真人顺手关心一下的消息。"
+            "不要提系统、定时、空闲阈值、主动触发、已经多久没回复这些内部原因。"
+            "如果缺少上下文，也发一条轻松自然的问候，不要显得突兀。"
+        )
         self.dispatch_proactive_message(profile_id, content, "idle_proactive_ping")
         self.runtime_store.mark_proactive_sent(profile_id)
         self._refresh_active_memory()
+
+    def _format_idle_duration(self, total_minutes: int) -> str:
+        minutes = max(int(total_minutes), 0)
+        days, rem = divmod(minutes, 1440)
+        hours, mins = divmod(rem, 60)
+        parts: list[str] = []
+        if days > 0:
+            parts.append(f"{days}天")
+        if hours > 0:
+            parts.append(f"{hours}小时")
+        if mins > 0 or not parts:
+            parts.append(f"{mins}分钟")
+        return "".join(parts)
 
     def _profile_id_for_inbound(self, inbound: Dict[str, Any]) -> str:
         channel = str(inbound.get("channel", "") or "").strip().lower()
@@ -1486,6 +1622,14 @@ class GatewayApp:
             if user_id:
                 return f"qq:{user_id}"
             return "qq:anonymous"
+        if channel == "qqbot":
+            group_id = str(inbound.get("group_id", "") or "").strip()
+            user_id = str(inbound.get("user_id", "") or "").strip()
+            if group_id:
+                return f"qqbot-group:{group_id}"
+            if user_id:
+                return f"qqbot:{user_id}"
+            return "qqbot:anonymous"
         open_id = str(inbound.get("open_id", "") or "").strip()
         if open_id:
             return f"feishu:{open_id}"
@@ -1661,14 +1805,16 @@ class GatewayApp:
             "- 用 4~8 条中文要点总结\n"
             "- 每条尽量一句话\n"
             "- 直接输出摘要内容，不要加解释\n\n"
-            "聊天内容：\n"
-            + "\n".join(transcript_lines[:80])
+            "聊天内容：\n" + "\n".join(transcript_lines[:80])
         )
         try:
             result = request_chat_completion(
                 provider,
                 [
-                    {"role": "system", "content": "你是摘要整理助手，只输出简明中文要点。"},
+                    {
+                        "role": "system",
+                        "content": "你是摘要整理助手，只输出简明中文要点。",
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 stream=False,
@@ -1688,8 +1834,18 @@ class GatewayApp:
         normalized = text.strip()
         if not normalized:
             return False
-        transcript_markers = [r"\[\d{2}:\d{2}\]", r"用户：", r"Aelios：", r"AI：", r"^-"]
-        hits = sum(1 for pattern in transcript_markers if re.search(pattern, normalized, flags=re.M))
+        transcript_markers = [
+            r"\[\d{2}:\d{2}\]",
+            r"用户：",
+            r"Aelios：",
+            r"AI：",
+            r"^-",
+        ]
+        hits = sum(
+            1
+            for pattern in transcript_markers
+            if re.search(pattern, normalized, flags=re.M)
+        )
         return hits >= 2 and len(normalized.splitlines()) >= 4
 
     def _compose_daily_log_content(
@@ -1738,20 +1894,41 @@ class GatewayApp:
             return
         capped_count = threshold * 20
         chunk_start = previous_threshold * 20 + 1
-        target_user_ids = {item.get("id") for item in user_messages[previous_threshold * 20 : capped_count]}
-        selected = [item for item in all_messages if item.get("role") != "user" or item.get("id") in target_user_ids or len(target_user_ids) > 0]
+        target_user_ids = {
+            item.get("id")
+            for item in user_messages[previous_threshold * 20 : capped_count]
+        }
+        selected = [
+            item
+            for item in all_messages
+            if item.get("role") != "user"
+            or item.get("id") in target_user_ids
+            or len(target_user_ids) > 0
+        ]
         if target_user_ids:
             valid_target_ids = [int(i) for i in target_user_ids if i is not None]
             if not valid_target_ids:
                 return
             last_target_id = max(valid_target_ids)
-            selected = [item for item in all_messages if int(item.get("id", 0) or 0) <= last_target_id]
+            selected = [
+                item
+                for item in all_messages
+                if int(item.get("id", 0) or 0) <= last_target_id
+            ]
             prev_target_id = 0
             if previous_threshold > 0:
-                previous_ids = [item.get("id") for item in user_messages[: previous_threshold * 20] if item.get("id") is not None]
+                previous_ids = [
+                    item.get("id")
+                    for item in user_messages[: previous_threshold * 20]
+                    if item.get("id") is not None
+                ]
                 valid_previous_ids = [int(i) for i in previous_ids if i is not None]
                 prev_target_id = max(valid_previous_ids) if valid_previous_ids else 0
-            selected = [item for item in selected if int(item.get("id", 0) or 0) > prev_target_id]
+            selected = [
+                item
+                for item in selected
+                if int(item.get("id", 0) or 0) > prev_target_id
+            ]
         if not selected:
             return
         summary = self._summarize_daily_log_chunk(
@@ -1769,7 +1946,9 @@ class GatewayApp:
                 tail = existing_content.split(marker, 1)[1].strip()
                 if tail:
                     sections.append(tail)
-        sections.append(f"### 第 {threshold} 段（{chunk_start}-{capped_count}）\n{summary}")
+        sections.append(
+            f"### 第 {threshold} 段（{chunk_start}-{capped_count}）\n{summary}"
+        )
         title, content = self._compose_daily_log_content(
             profile_id=profile_id,
             day=day_start,
@@ -2088,9 +2267,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._json(
                     HTTPStatus.OK,
                     {
+                        "qqbot": app.qqbot_channel.status()
+                        if app.qqbot_channel
+                        else {"enabled": False, "ready": False},
                         "qq": app.napcat_channel.status()
                         if app.napcat_channel
-                        else {"enabled": False, "ready": False}
+                        else {"enabled": False, "ready": False},
                     },
                 )
                 return
@@ -2166,6 +2348,17 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._json(HTTPStatus.OK, app.update_config(body))
                 return
             if parsed.path == "/api/channels/qq/inbound":
+                if body.get("op") == 13:
+                    if app.qqbot_channel is None:
+                        raise ValueError("qqbot channel is not enabled")
+                    self._json(
+                        HTTPStatus.OK, app.qqbot_channel.validation_response(body)
+                    )
+                    return
+                if app.qqbot_channel is not None and body.get("t"):
+                    app.qqbot_channel.handle_event(body)
+                    self._json(HTTPStatus.OK, {"ok": True, "provider": "qqbot"})
+                    return
                 if app.napcat_channel is None:
                     raise ValueError("qq channel is not enabled")
                 app.napcat_channel.handle_event(body)

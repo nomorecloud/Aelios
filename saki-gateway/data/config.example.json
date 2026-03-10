@@ -71,8 +71,11 @@
     "poll_interval_seconds": 15,
     "proactive_enabled": false,
     "proactive_idle_hours": 72,
+    "proactive_idle_minutes": 0,
     "proactive_cooldown_hours": 24,
-    "proactive_max_profiles_per_tick": 2
+    "proactive_max_profiles_per_tick": 2,
+    "proactive_day_start_hour": 8,
+    "proactive_day_end_hour": 22
   },
   "notion_sync": {
     "enabled": false,
@@ -83,9 +86,12 @@
   "channels": {
     "feishu_enabled": false,
     "napcat_enabled": false,
+    "qqbot_enabled": false,
     "web_enabled": true,
     "feishu_app_id": "",
     "feishu_app_secret": "",
+    "qqbot_app_id": "",
+    "qqbot_token": "",
     "napcat_base_url": "http://127.0.0.1:3000",
     "napcat_access_token": "",
     "feishu_auto_reconnect": true,
