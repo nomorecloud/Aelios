@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
 import json
 import mimetypes
 import re
@@ -9,6 +10,7 @@ import sys
 import threading
 from dataclasses import asdict
 from datetime import datetime, timedelta
+from difflib import SequenceMatcher
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -1341,18 +1343,41 @@ class GatewayApp:
     def upsert_panel_memory(
         self, body: Dict[str, Any], memory_id: str = ""
     ) -> Dict[str, Any]:
-        raw_id = (
-            memory_id
-            or str(body.get("id", "") or "")
-            or f"mem_{len(self.memory_store.list_memories(1000)) + 1}"
+        existing = (
+            self.memory_store.get_memory(raw_id)
+            if (
+                raw_id := (
+                    memory_id
+                    or str(body.get("id", "") or "")
+                    or f"mem_{len(self.memory_store.list_memories(1000)) + 1}"
+                )
+            )
+            else None
         )
         title = str(body.get("title", "") or body.get("key", "") or "untitled")
+        requested_kind = str(body.get("memory_kind", "") or "").strip()
+        memory_kind = (
+            requested_kind
+            or (
+                getattr(existing, "memory_kind", "")
+                if existing is not None
+                else "long_term"
+            )
+            or "long_term"
+        )
+        category = (
+            str(body.get("category", "") or "").strip()
+            or (getattr(existing, "category", "") if existing is not None else "other")
+            or "other"
+        )
+        if memory_kind == "daily_log":
+            category = "daily_log"
         record = self.memory_store.upsert_memory(
             memory_id=raw_id,
             key=title,
             content=str(body.get("content", "") or ""),
-            memory_kind="long_term",
-            category=str(body.get("category", "other") or "other"),
+            memory_kind=memory_kind,
+            category=category,
             importance=float(body.get("importance", 0.5) or 0.5),
             session_id=str(body.get("session_id", "") or ""),
             embedding=body.get("embedding") or [],
@@ -1661,21 +1686,25 @@ class GatewayApp:
             "- 用 4~8 条中文要点总结\n"
             "- 每条尽量一句话\n"
             "- 直接输出摘要内容，不要加解释\n\n"
-            "聊天内容：\n"
-            + "\n".join(transcript_lines[:80])
+            "聊天内容：\n" + "\n".join(transcript_lines[:80])
         )
         try:
             result = request_chat_completion(
                 provider,
                 [
-                    {"role": "system", "content": "你是摘要整理助手，只输出简明中文要点。"},
+                    {
+                        "role": "system",
+                        "content": "你是摘要整理助手，只输出简明中文要点。",
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 stream=False,
                 temperature=0.2,
                 timeout=30,
             )
-            summary = extract_text_content(result).strip()
+            summary = self._clean_daily_log_summary(
+                extract_text_content(result).strip()
+            )
         except Exception:
             summary = ""
         if self._looks_like_transcript(summary):
@@ -1688,9 +1717,119 @@ class GatewayApp:
         normalized = text.strip()
         if not normalized:
             return False
-        transcript_markers = [r"\[\d{2}:\d{2}\]", r"用户：", r"Aelios：", r"AI：", r"^-"]
-        hits = sum(1 for pattern in transcript_markers if re.search(pattern, normalized, flags=re.M))
-        return hits >= 2 and len(normalized.splitlines()) >= 4
+        transcript_markers = [r"\[\d{2}:\d{2}\]", r"用户：", r"Aelios：", r"AI："]
+        hits = sum(
+            len(re.findall(pattern, normalized, flags=re.M))
+            for pattern in transcript_markers
+        )
+        return hits >= 4 and len(normalized.splitlines()) >= 4
+
+    def _clean_daily_log_summary(self, text: str) -> str:
+        lines = [line.rstrip() for line in str(text or "").splitlines()]
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        if lines and re.match(r"^以下是今(日|天).{0,10}摘要[：:]?$", lines[0].strip()):
+            lines.pop(0)
+            while lines and not lines[0].strip():
+                lines.pop(0)
+        cleaned = "\n".join(lines).strip()
+        return re.sub(r"\n{3,}", "\n\n", cleaned)
+
+    def _extract_processed_message_count(self, text: str) -> int:
+        raw = str(text or "")
+        for pattern in [r"已整理消息[：:]\s*(\d+)", r"已整理\s*(\d+)\s*条消息"]:
+            match = re.search(pattern, raw)
+            if match:
+                return max(0, int(match.group(1)))
+        return 0
+
+    def _normalize_memory_text(self, text: str) -> str:
+        return re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", str(text or "").lower())
+
+    def _match_existing_memory(
+        self,
+        *,
+        key: str,
+        content: str,
+        category: str,
+        existing_memories: list[Any],
+        used_ids: set[str],
+    ) -> Optional[Any]:
+        normalized_key = self._normalize_memory_text(key)
+        normalized_content = self._normalize_memory_text(content)
+        if not normalized_key and not normalized_content:
+            return None
+
+        exact_key_match: Optional[Any] = None
+        best_match: Optional[Any] = None
+        best_score = 0.0
+
+        for record in existing_memories:
+            if getattr(record, "category", "") == "memory_refresh":
+                continue
+            if record.id in used_ids:
+                continue
+
+            existing_key = self._normalize_memory_text(getattr(record, "key", ""))
+            existing_content = self._normalize_memory_text(
+                getattr(record, "content", "")
+            )
+
+            if normalized_key and existing_key and normalized_key == existing_key:
+                exact_key_match = record
+                break
+
+            key_ratio = (
+                SequenceMatcher(None, normalized_key, existing_key).ratio()
+                if normalized_key and existing_key
+                else 0.0
+            )
+            content_ratio = (
+                SequenceMatcher(
+                    None, normalized_content[:400], existing_content[:400]
+                ).ratio()
+                if normalized_content and existing_content
+                else 0.0
+            )
+            containment_bonus = 0.0
+            if (
+                normalized_key
+                and existing_key
+                and (normalized_key in existing_key or existing_key in normalized_key)
+            ):
+                containment_bonus += 0.15
+            if (
+                normalized_content
+                and existing_content
+                and min(len(normalized_content), len(existing_content)) >= 24
+                and (
+                    normalized_content in existing_content
+                    or existing_content in normalized_content
+                )
+            ):
+                containment_bonus += 0.1
+            category_bonus = (
+                0.05
+                if category and getattr(record, "category", "") == category
+                else 0.0
+            )
+            score = max(
+                key_ratio + containment_bonus + category_bonus,
+                content_ratio * 0.9 + containment_bonus + category_bonus,
+                key_ratio * 0.65
+                + content_ratio * 0.35
+                + containment_bonus
+                + category_bonus,
+            )
+            if score > best_score:
+                best_score = score
+                best_match = record
+
+        if exact_key_match is not None:
+            return exact_key_match
+        if best_match is not None and best_score >= 0.82:
+            return best_match
+        return None
 
     def _compose_daily_log_content(
         self,
@@ -1727,49 +1866,36 @@ class GatewayApp:
             return
         log_id = self._daily_log_memory_id(profile_id, day_start)
         existing = self.memory_store.get_memory(log_id)
-        previous_threshold = 0
-        if existing is not None:
-            match = re.search(r"已整理\s+(\d+)\s+条消息", existing.content)
-            if match:
-                previous_threshold = max(0, int(match.group(1)) // 20)
-        if threshold <= previous_threshold:
+        previous_processed = self._extract_processed_message_count(
+            existing.content if existing is not None else ""
+        )
+        capped_count = threshold * 20
+        if capped_count <= previous_processed:
             return
         if not all_messages:
             return
-        capped_count = threshold * 20
-        chunk_start = previous_threshold * 20 + 1
-        target_user_ids = {item.get("id") for item in user_messages[previous_threshold * 20 : capped_count]}
-        selected = [item for item in all_messages if item.get("role") != "user" or item.get("id") in target_user_ids or len(target_user_ids) > 0]
+        target_user_ids = {item.get("id") for item in user_messages[:capped_count]}
+        selected = all_messages
         if target_user_ids:
             valid_target_ids = [int(i) for i in target_user_ids if i is not None]
             if not valid_target_ids:
                 return
             last_target_id = max(valid_target_ids)
-            selected = [item for item in all_messages if int(item.get("id", 0) or 0) <= last_target_id]
-            prev_target_id = 0
-            if previous_threshold > 0:
-                previous_ids = [item.get("id") for item in user_messages[: previous_threshold * 20] if item.get("id") is not None]
-                valid_previous_ids = [int(i) for i in previous_ids if i is not None]
-                prev_target_id = max(valid_previous_ids) if valid_previous_ids else 0
-            selected = [item for item in selected if int(item.get("id", 0) or 0) > prev_target_id]
+            selected = [
+                item
+                for item in all_messages
+                if int(item.get("id", 0) or 0) <= last_target_id
+            ]
         if not selected:
             return
         summary = self._summarize_daily_log_chunk(
             profile_id=profile_id,
             day=day_start,
             messages=selected,
-            chunk_start=chunk_start,
+            chunk_start=1,
             chunk_end=capped_count,
         )
-        sections: list[str] = []
-        if existing is not None:
-            marker = "今日日志摘要："
-            existing_content = existing.content or ""
-            if marker in existing_content:
-                tail = existing_content.split(marker, 1)[1].strip()
-                if tail:
-                    sections.append(tail)
-        sections.append(f"### 第 {threshold} 段（{chunk_start}-{capped_count}）\n{summary}")
+        sections = [f"### 已整理区间（1-{capped_count}）\n{summary}"]
         title, content = self._compose_daily_log_content(
             profile_id=profile_id,
             day=day_start,
@@ -1832,8 +1958,10 @@ class GatewayApp:
             return
         log_id = self._daily_log_memory_id(profile_id, day_start)
         existing = self.memory_store.get_memory(log_id)
-        if existing is not None and "### 晚安前补全摘要" in (existing.content or ""):
-            return
+        if existing is not None:
+            existing_processed = self._extract_processed_message_count(existing.content)
+            if existing_processed >= len(user_messages):
+                return
         summary = self._summarize_daily_log_chunk(
             profile_id=profile_id,
             day=day_start,
@@ -1841,15 +1969,7 @@ class GatewayApp:
             chunk_start=1,
             chunk_end=len(user_messages),
         )
-        sections: list[str] = []
-        if existing is not None:
-            marker = "今日日志摘要："
-            existing_content = existing.content or ""
-            if marker in existing_content:
-                tail = existing_content.split(marker, 1)[1].strip()
-                if tail:
-                    sections.append(tail)
-        sections.append(f"### 晚安前补全摘要（1-{len(user_messages)}）\n{summary}")
+        sections = [f"### 晚安前补全摘要（1-{len(user_messages)}）\n{summary}"]
         title, content = self._compose_daily_log_content(
             profile_id=profile_id,
             day=day_start,
@@ -1876,6 +1996,7 @@ class GatewayApp:
         daily_log = self.memory_store.get_memory(log_id)
         if daily_log is None:
             return
+        processed_count = self._extract_processed_message_count(daily_log.content)
         existing_refresh_key = (
             f"digest::{(profile_id or 'local-user')}::{day_start.strftime('%Y-%m-%d')}"
         )
@@ -1885,7 +2006,11 @@ class GatewayApp:
             memory_kind="long_term",
         )
         if existing_refresh:
-            return
+            refreshed_count = self._extract_processed_message_count(
+                existing_refresh[0].content
+            )
+            if refreshed_count >= processed_count > 0:
+                return
 
         existing_memories = self.memory_store.list_memories(
             limit=80, memory_kind="long_term"
@@ -1934,6 +2059,8 @@ class GatewayApp:
                 return
             updated_any = False
             existing_by_id = {item.id: item for item in existing_memories}
+            used_existing_ids: set[str] = set()
+            seen_entries: set[str] = set()
             for item in items[:10]:
                 if not isinstance(item, dict):
                     continue
@@ -1947,12 +2074,30 @@ class GatewayApp:
                 importance = max(0.0, min(1.0, importance))
                 if category == "daily_log":
                     continue
-                memory_id = (
-                    target_id
-                    or f"digest_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
-                )
-                if target_id and target_id not in existing_by_id:
+                entry_fingerprint = hashlib.sha256(
+                    f"{category}\n{self._normalize_memory_text(key)}\n{self._normalize_memory_text(content[:280])}".encode(
+                        "utf-8"
+                    )
+                ).hexdigest()
+                if entry_fingerprint in seen_entries:
                     continue
+                seen_entries.add(entry_fingerprint)
+                matched = existing_by_id.get(target_id) if target_id else None
+                if target_id and matched is None:
+                    continue
+                if matched is None:
+                    matched = self._match_existing_memory(
+                        key=key,
+                        content=content,
+                        category=category,
+                        existing_memories=existing_memories,
+                        used_ids=used_existing_ids,
+                    )
+                memory_id = (
+                    matched.id
+                    if matched is not None
+                    else f"digest_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+                )
                 self.memory_store.upsert_memory(
                     memory_id=memory_id,
                     key=key,
@@ -1962,6 +2107,8 @@ class GatewayApp:
                     importance=importance,
                     session_id=session_id,
                 )
+                if matched is not None:
+                    used_existing_ids.add(matched.id)
                 updated_any = True
         except Exception:
             pass
@@ -1970,7 +2117,10 @@ class GatewayApp:
                 self.memory_store.upsert_memory(
                     memory_id=f"refresh_{day_start.strftime('%Y%m%d')}_{profile_id or 'local-user'}",
                     key=existing_refresh_key,
-                    content=f"已在 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 根据今日日志刷新长期记忆。",
+                    content=(
+                        f"已在 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 根据今日日志刷新长期记忆。\n"
+                        f"已整理消息：{processed_count}"
+                    ),
                     memory_kind="long_term",
                     category="memory_refresh",
                     importance=0.0,
