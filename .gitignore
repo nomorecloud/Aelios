@@ -16,3 +16,12 @@ saki-gateway/data/raw/
 # Local secrets / overrides
 .env
 .env.*
+# Local runtime / imports / private memory
+saki-gateway/data/notion_import/
+saki-gateway/.venv/
+saki-gateway/src/*.egg-info/
+saki-gateway/src/**/*.egg-info/
+*.log
+*.sqlite
+*.sqlite3
+*.jsonl

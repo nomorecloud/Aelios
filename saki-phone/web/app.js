@@ -24,6 +24,7 @@ class SakiPhoneApp {
     this.currentMemoryView = 'long_term';
     this.currentMemoryCategory = '';
     this.expandedLogIds = new Set();
+    this.editingMemoryId = null;
     this.init();
   }
 
@@ -488,11 +489,6 @@ class SakiPhoneApp {
               </div>
             </div>
             <div class="memory-card-body memory-log-body ${this.expandedLogIds.has(String(m.id || '')) ? 'expanded' : ''}">
-              <div class="memory-log-actions">
-                <button class="action-btn" onclick="event.stopPropagation(); app.showEditMemoryModal('${this.escAttr(String(m.id || ''))}', 'daily_log')" title="编辑日志">
-                  ${svgIcon('edit', 'icon-sm')}
-                </button>
-              </div>
               <div class="memory-log-content">${this.escapeHtml(m.content || '')}</div>
             </div>
           </div>
@@ -505,6 +501,7 @@ class SakiPhoneApp {
       const data = await res.json();
 
       const items = data.items || [];
+      this.memoryCache = items;
       const stats = data.stats || {};
 
       const categories = [
@@ -549,22 +546,28 @@ class SakiPhoneApp {
         return;
       }
 
-      contentEl.innerHTML = `<div class="memory-grid">${filtered.map(m => `
-        <div class="memory-card">
-          <div class="memory-card-header">
-            <span class="memory-date">${m.date || ''}</span>
-            <div class="memory-card-actions">
-              <button class="action-btn" onclick="app.showEditMemoryModal('${this.escAttr(String(m.id || ''))}', 'long_term')" title="编辑">
+      contentEl.innerHTML = `<div class="memory-log-list">${filtered.map(m => `
+        <div class="memory-card memory-log-card ${this.expandedLogIds.has(String(m.id || '')) ? 'expanded' : ''}">
+          <div class="memory-card-header memory-log-header" onclick="app.toggleLogCard('${this.escAttr(String(m.id || ''))}')">
+            <div class="memory-log-main">
+              <span class="memory-date">${this.escapeHtml(m.date || '')}</span>
+              <div class="memory-title">${this.escapeHtml(m.title || m.key || '')}</div>
+            </div>
+            <div class="memory-log-side">
+              <span class="memory-log-badge">${this.escapeHtml(m.category || '记忆')}</span>
+              <span class="memory-log-toggle-label">${this.expandedLogIds.has(String(m.id || '')) ? '收起' : '展开'}</span>
+            </div>
+          </div>
+          <div class="memory-card-body memory-log-body ${this.expandedLogIds.has(String(m.id || '')) ? 'expanded' : ''}">
+            <div class="memory-log-content">${this.escapeHtml(m.content || '')}</div>
+            <div class="memory-card-footer memory-unified-footer">
+              <button class="action-btn" onclick="event.stopPropagation(); app.showEditMemoryModal('${this.escAttr(String(m.id || ''))}')" title="编辑">
                 ${svgIcon('edit', 'icon-sm')}
               </button>
-              <button class="action-btn delete" onclick="app.deleteMemory('${m.id}')" title="删除">
+              <button class="action-btn delete" onclick="event.stopPropagation(); app.deleteMemory('${this.escAttr(String(m.id || ''))}')" title="删除">
                 ${svgIcon('trash', 'icon-sm')}
               </button>
             </div>
-          </div>
-          <div class="memory-card-body">
-            <div class="memory-title">${this.escapeHtml(m.title || m.key || '')}</div>
-            <div class="memory-content">${this.escapeHtml(m.content || '')}</div>
           </div>
         </div>
       `).join('')}</div>`;
@@ -623,22 +626,28 @@ class SakiPhoneApp {
         return;
       }
 
-      contentEl.innerHTML = `<div class="memory-grid">${items.map(m => `
-        <div class="memory-card">
-          <div class="memory-card-header">
-            <span class="memory-date">${m.date || ''}</span>
-            <div class="memory-card-actions">
-              <button class="action-btn" onclick="app.showEditMemoryModal('${this.escAttr(String(m.id || ''))}', 'long_term')" title="编辑">
+      contentEl.innerHTML = `<div class="memory-log-list">${items.map(m => `
+        <div class="memory-card memory-log-card ${this.expandedLogIds.has(String(m.id || '')) ? 'expanded' : ''}">
+          <div class="memory-card-header memory-log-header" onclick="app.toggleLogCard('${this.escAttr(String(m.id || ''))}')">
+            <div class="memory-log-main">
+              <span class="memory-date">${this.escapeHtml(m.date || '')}</span>
+              <div class="memory-title">${this.escapeHtml(m.title || m.key || '')}</div>
+            </div>
+            <div class="memory-log-side">
+              <span class="memory-log-badge">${this.escapeHtml(m.category || '记忆')}</span>
+              <span class="memory-log-toggle-label">${this.expandedLogIds.has(String(m.id || '')) ? '收起' : '展开'}</span>
+            </div>
+          </div>
+          <div class="memory-card-body memory-log-body ${this.expandedLogIds.has(String(m.id || '')) ? 'expanded' : ''}">
+            <div class="memory-log-content">${this.escapeHtml(m.content || '')}</div>
+            <div class="memory-card-footer memory-unified-footer">
+              <button class="action-btn" onclick="event.stopPropagation(); app.showEditMemoryModal('${this.escAttr(String(m.id || ''))}')" title="编辑">
                 ${svgIcon('edit', 'icon-sm')}
               </button>
-              <button class="action-btn delete" onclick="app.deleteMemory('${m.id}')" title="删除">
+              <button class="action-btn delete" onclick="event.stopPropagation(); app.deleteMemory('${this.escAttr(String(m.id || ''))}')" title="删除">
                 ${svgIcon('trash', 'icon-sm')}
               </button>
             </div>
-          </div>
-          <div class="memory-card-body">
-            <div class="memory-title">${this.escapeHtml(m.title || m.key || '')}</div>
-            <div class="memory-content">${this.escapeHtml(m.content || '')}</div>
           </div>
         </div>
       `).join('')}</div>`;
@@ -681,57 +690,44 @@ class SakiPhoneApp {
     `);
   }
 
-  async showEditMemoryModal(id, memoryKind = 'long_term') {
-    const endpoint = memoryKind === 'daily_log' ? '/api/logs' : '/api/memories';
-    try {
-      const res = await this.apiFetch(endpoint);
-      if (!res.ok) throw new Error('Failed to load memory');
-      const data = await res.json();
-      const items = data.items || [];
-      const target = items.find(item => String(item.id || '') === String(id || ''));
-      if (!target) throw new Error('Memory not found');
-
-      const isLog = memoryKind === 'daily_log';
-      this.showModal(isLog ? '编辑日志' : '编辑记忆', `
-        <div class="form-group">
-          <label>标题</label>
-          <input type="text" id="mem-edit-title" placeholder="标题" value="${this.escAttr(target.title || target.key || '')}">
-        </div>
-        <div class="form-group">
-          <label>内容</label>
-          <textarea id="mem-edit-content" rows="${isLog ? '10' : '6'}" placeholder="内容">${this.escapeHtml(target.content || '')}</textarea>
-        </div>
-        ${isLog ? '' : `
-          <div class="form-row">
-            <div class="form-group">
-              <label>分类</label>
-              <select id="mem-edit-category">
-                <option value="preference" ${(target.category || '') === 'preference' ? 'selected' : ''}>喜好</option>
-                <option value="anniversary" ${(target.category || '') === 'anniversary' ? 'selected' : ''}>纪念日</option>
-                <option value="promise" ${(target.category || '') === 'promise' ? 'selected' : ''}>约定</option>
-                <option value="event" ${(target.category || '') === 'event' ? 'selected' : ''}>事件</option>
-                <option value="emotion" ${(target.category || '') === 'emotion' ? 'selected' : ''}>情绪</option>
-                <option value="habit" ${(target.category || '') === 'habit' ? 'selected' : ''}>习惯</option>
-                <option value="boundary" ${(target.category || '') === 'boundary' ? 'selected' : ''}>边界</option>
-                <option value="story" ${(target.category || '') === 'story' ? 'selected' : ''}>故事</option>
-                <option value="password" ${(target.category || '') === 'password' ? 'selected' : ''}>密码</option>
-                <option value="travel" ${(target.category || '') === 'travel' ? 'selected' : ''}>旅行</option>
-                <option value="other" ${!(target.category || '') || (target.category || '') === 'other' ? 'selected' : ''}>其他</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>重要度 (0-1)</label>
-              <input type="number" id="mem-edit-importance" min="0" max="1" step="0.1" value="${this.escAttr(String(target.importance ?? 0.5))}">
-            </div>
-          </div>
-        `}
-      `, `
-        <button class="btn btn-secondary" onclick="app.hideModal()">取消</button>
-        <button class="btn btn-primary" onclick="app.saveEditedMemory('${this.escAttr(String(target.id || ''))}', '${isLog ? 'daily_log' : 'long_term'}', '${this.escAttr(String(target.session_id || ''))}')">保存</button>
-      `);
-    } catch (err) {
-      this.showToast(`加载失败: ${err.message}`, 'error');
+  showEditMemoryModal(id) {
+    const item = (this.memoryCache || []).find(m => String(m.id || '') === String(id || ''));
+    if (!item) {
+      this.showToast('没找到这条记忆', 'warning');
+      return;
     }
+    this.editingMemoryId = String(item.id || '');
+    this.showModal('编辑记忆', `
+      <div class="form-group">
+        <label>标题</label>
+        <input type="text" id="mem-title" value="${this.escAttr(item.title || item.key || '')}">
+      </div>
+      <div class="form-group">
+        <label>内容</label>
+        <textarea id="mem-content" rows="4">${this.escapeHtml(item.content || '')}</textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>分类</label>
+          <select id="mem-category">
+            <option value="preference" ${(item.category || '') === 'preference' ? 'selected' : ''}>喜好</option>
+            <option value="anniversary" ${(item.category || '') === 'anniversary' ? 'selected' : ''}>纪念日</option>
+            <option value="promise" ${(item.category || '') === 'promise' ? 'selected' : ''}>约定</option>
+            <option value="story" ${(item.category || '') === 'story' ? 'selected' : ''}>故事</option>
+            <option value="password" ${(item.category || '') === 'password' ? 'selected' : ''}>密码</option>
+            <option value="travel" ${(item.category || '') === 'travel' ? 'selected' : ''}>旅行</option>
+            <option value="other" ${!item.category || item.category === 'other' ? 'selected' : ''}>其他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>重要度 (0-1)</label>
+          <input type="number" id="mem-importance" min="0" max="1" step="0.1" value="${this.escAttr(String(item.importance ?? 0.5))}">
+        </div>
+      </div>
+    `, `
+      <button class="btn btn-secondary" onclick="app.hideModal()">取消</button>
+      <button class="btn btn-primary" onclick="app.updateMemory()">保存修改</button>
+    `);
   }
 
   async saveNewMemory() {
@@ -760,17 +756,14 @@ class SakiPhoneApp {
     }
   }
 
-  async saveEditedMemory(id, memoryKind = 'long_term', sessionId = '') {
-    const title = document.getElementById('mem-edit-title')?.value?.trim();
-    const content = document.getElementById('mem-edit-content')?.value?.trim();
-    const category = memoryKind === 'daily_log'
-      ? 'daily_log'
-      : (document.getElementById('mem-edit-category')?.value || 'other');
-    const importance = memoryKind === 'daily_log'
-      ? 0.2
-      : (parseFloat(document.getElementById('mem-edit-importance')?.value) || 0.5);
+  async updateMemory() {
+    const id = this.editingMemoryId;
+    const title = document.getElementById('mem-title')?.value?.trim();
+    const content = document.getElementById('mem-content')?.value?.trim();
+    const category = document.getElementById('mem-category')?.value || 'other';
+    const importance = parseFloat(document.getElementById('mem-importance')?.value) || 0.5;
 
-    if (!title || !content) {
+    if (!id || !title || !content) {
       this.showToast('请填写标题和内容', 'warning');
       return;
     }
@@ -779,20 +772,11 @@ class SakiPhoneApp {
       const res = await this.apiFetch(`/api/memories/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id,
-          title,
-          key: title,
-          content,
-          category,
-          importance,
-          memory_kind: memoryKind,
-          session_id: sessionId,
-        })
+        body: JSON.stringify({ title, key: title, content, category, importance })
       });
       if (!res.ok) throw new Error('Failed to update');
       this.hideModal();
-      this.showToast(memoryKind === 'daily_log' ? '日志已更新' : '记忆已更新', 'success');
+      this.showToast('记忆已更新', 'success');
       this.renderMemories();
     } catch (err) {
       this.showToast(`更新失败: ${err.message}`, 'error');
