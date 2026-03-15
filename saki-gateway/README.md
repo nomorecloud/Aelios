@@ -93,6 +93,35 @@ Known limitations:
 - UI review panel is not included in this slice (backend operations only).
 - Semantic merge is intentionally conservative; richer contradiction resolution and ontology-aware merging remain TODO.
 
+
+## Review/admin visibility surface (Phase 4 slice 5)
+A minimal backend review surface is available via authenticated dashboard API routes (no chat UI changes):
+
+- `GET /api/review/proposals?status=open&limit=50`
+  - Defaults to `status=open`
+  - Supports `status=open|approved|rejected|all`
+  - Returns reviewer-facing proposal fields: `id`, `target_section`, `proposed_content`, `proposal_type`, `confidence`, `reason`, `source_context`, `status`, `created_at`, `updated_at`, `reviewed_at`
+- `POST /api/review/proposals/{proposal_id}/approve`
+  - Runs existing approval workflow + semantic merge
+  - Returns clear `ok` flag and updated proposal status payload
+- `POST /api/review/proposals/{proposal_id}/reject`
+  - Runs existing rejection workflow
+  - Returns clear `ok` flag and updated proposal status payload
+- `GET /api/review/digest-state?history_limit=10`
+  - Returns latest persisted digest run state (`id`/run date, status, started/completed timestamps, error)
+  - Also returns whether current local date already completed successfully
+  - Includes recent `digest_run` history entries from event log when available
+- `GET /api/review/memory`
+  - Read-only inspection for current `core_profile.md` and `active_memory.md`
+  - Exposes both raw content and section-extracted view for:
+    - core: `About Her`, `Relationship Core`, `My Profile`
+    - active: `Current Status`, `Purpose Context`, `On the Horizon`, `Others`
+
+Known limitations:
+- Surface is intentionally backend/debug-first and not a polished operator UI.
+- Digest history is event-derived (best effort) and may be limited by event retention.
+- TODO: add richer review pagination/filtering and explicit reviewer identity metadata.
+
 ## Human-like message segmentation
 Feishu and QQBot outbound text now prefer newline-based segmentation. Each non-empty line is sent as an individual message segment, with a short configurable delay between segments, and long lines still fall back to chunking by `send_chunk_chars`.
 
@@ -142,3 +171,60 @@ Routing rule in system prompt: for diary notes / study notes / book notes / "my 
    - if Trilium is down/unreachable: assistant should indicate **Trilium unavailable**
    - if Trilium is healthy but query returns empty: assistant should indicate **no notes found**
 5. Send an ordinary chat message like `今天心情有点低落` and confirm Trilium tools are not triggered unless notes are explicitly requested.
+
+
+## Learning session foundation (Phase 4 next slice)
+This slice adds a backend-first learning-session flow focused on sustainable study continuity (not harsh productivity scoring).
+
+### Runtime SQLite schema
+`runtime_store` now persists:
+
+- `learning_sessions`
+  - `id`, `title`, `goal`, `subject`, `mode`, `status`, `planned_minutes`, `pomodoro_count`,
+  - `started_at`, `ended_at`, `actual_minutes`, `summary`, `blockers`, `next_step`, `created_at`, `updated_at`
+- `wellbeing_checkins`
+  - `id`, `session_id`, `stage`, `energy_level`, `focus_level`, `mood_level`, `body_state_level`, `stress_level`, `note`, `created_at`
+
+Mode lifecycle:
+- `focus | recovery | review`
+
+Status lifecycle:
+- `active -> completed`
+- `active -> abandoned`
+
+Guardrails:
+- At most one `active` learning session at a time.
+- State transitions require active status.
+- `actual_minutes` is computed from `started_at`/`ended_at` when not provided.
+- Very small `planned_minutes` values are allowed and `mode=recovery` is first-class.
+
+### Minimal backend/admin endpoints
+Authenticated dashboard API routes:
+
+- `GET /api/learning-sessions/active`
+- `GET /api/learning-sessions?status=&limit=20`
+- `GET /api/learning-sessions/{session_id}`
+- `GET /api/learning-sessions/{session_id}/checkins?limit=20`
+- `POST /api/learning-sessions/start`
+  - supports optional `start_checkin`
+- `POST /api/learning-sessions/{session_id}/update`
+- `POST /api/learning-sessions/{session_id}/complete`
+  - supports optional `end_checkin`
+- `POST /api/learning-sessions/{session_id}/abandon`
+  - supports optional `end_checkin`
+- `POST /api/learning-sessions/{session_id}/checkins`
+
+### Check-in behavior
+- `stage` supports `start | end`.
+- Structured levels are lightweight (1-5) and optional.
+- Short free-text `note` is supported.
+
+### Minimal memory/digest-adjacent integration
+- On completion, a concise long-term memory item is upserted with category `learning_session`.
+- This allows the existing active-memory renderer to surface recent session outcomes with minimal change.
+- No automatic `core_profile` mutation is performed.
+
+Known limitations / TODO:
+- No polished timer/dashboard UI in this slice.
+- No advanced wellbeing analytics or scoring.
+- TODO: optional Trilium completion note output can be added later if needed.

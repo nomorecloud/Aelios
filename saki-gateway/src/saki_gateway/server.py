@@ -1437,6 +1437,250 @@ class GatewayApp:
         )
         return {"success": True, "deleted": self._serialize_reminder(reminder)}
 
+    def _serialize_learning_session(self, record: Any) -> Dict[str, Any]:
+        return {
+            "id": record.session_id,
+            "title": record.title,
+            "goal": record.goal,
+            "subject": record.subject,
+            "mode": record.mode,
+            "status": record.status,
+            "planned_minutes": record.planned_minutes,
+            "pomodoro_count": record.pomodoro_count,
+            "started_at": record.started_at,
+            "ended_at": record.ended_at,
+            "actual_minutes": record.actual_minutes,
+            "summary": record.summary,
+            "blockers": record.blockers,
+            "next_step": record.next_step,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+        }
+
+    def _serialize_wellbeing_checkin(self, record: Any) -> Dict[str, Any]:
+        return {
+            "id": record.checkin_id,
+            "session_id": record.session_id,
+            "stage": record.stage,
+            "energy_level": record.energy_level,
+            "focus_level": record.focus_level,
+            "mood_level": record.mood_level,
+            "body_state_level": record.body_state_level,
+            "stress_level": record.stress_level,
+            "note": record.note,
+            "created_at": record.created_at,
+        }
+
+    def _coerce_level(self, value: Any) -> Optional[int]:
+        if value in {None, ""}:
+            return None
+        level = int(value)
+        return max(1, min(5, level))
+
+    def _validate_learning_mode(self, mode: str) -> str:
+        normalized = str(mode or "focus").strip().lower()
+        if normalized not in {"focus", "recovery", "review"}:
+            raise ValueError("invalid_learning_mode")
+        return normalized
+
+    def _calculate_actual_minutes(self, started_at: str, ended_at: str) -> int:
+        try:
+            started = datetime.fromisoformat(started_at)
+            ended = datetime.fromisoformat(ended_at)
+        except ValueError:
+            return 0
+        delta = ended - started
+        return max(0, int(delta.total_seconds() // 60))
+
+    def list_learning_sessions_payload(self, status: str = "", limit: int = 20) -> Dict[str, Any]:
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status and normalized_status not in {"active", "completed", "abandoned"}:
+            normalized_status = ""
+        items = [
+            self._serialize_learning_session(record)
+            for record in self.runtime_store.list_learning_sessions(
+                status=normalized_status,
+                limit=max(1, min(limit, 100)),
+            )
+        ]
+        return {"status": normalized_status, "items": items}
+
+    def get_active_learning_session_payload(self) -> Dict[str, Any]:
+        active = self.runtime_store.get_active_learning_session()
+        return {"item": self._serialize_learning_session(active) if active else None}
+
+    def get_learning_session_payload(self, session_id: str) -> Dict[str, Any]:
+        session = self.runtime_store.get_learning_session(session_id)
+        return {"item": self._serialize_learning_session(session)}
+
+    def list_wellbeing_checkins_payload(self, session_id: str, limit: int = 20) -> Dict[str, Any]:
+        items = [
+            self._serialize_wellbeing_checkin(record)
+            for record in self.runtime_store.list_wellbeing_checkins(
+                session_id=session_id,
+                limit=max(1, min(limit, 100)),
+            )
+        ]
+        return {"session_id": session_id, "items": items}
+
+    def create_learning_session_payload(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        title = str(body.get("title", "") or "").strip()
+        goal = str(body.get("goal", "") or "").strip()
+        if not title:
+            raise ValueError("title is required")
+        mode = self._validate_learning_mode(str(body.get("mode", "focus") or "focus"))
+        planned_minutes = int(body.get("planned_minutes", 25) or 25)
+        pomodoro_count = int(body.get("pomodoro_count", 0) or 0)
+        started_at = str(body.get("started_at", "") or "").strip() or datetime.utcnow().isoformat()
+        record = self.runtime_store.create_learning_session(
+            session_id=f"learn_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}",
+            title=title,
+            goal=goal,
+            subject=str(body.get("subject", "") or "").strip(),
+            mode=mode,
+            planned_minutes=max(1, planned_minutes),
+            pomodoro_count=max(0, pomodoro_count),
+            started_at=started_at,
+        )
+        checkin_payload = body.get("start_checkin")
+        if isinstance(checkin_payload, dict):
+            self.add_wellbeing_checkin_payload(record.session_id, {"stage": "start", **checkin_payload})
+        self._record_event(
+            "learning_session_started",
+            {
+                "session_id": record.session_id,
+                "mode": record.mode,
+                "planned_minutes": record.planned_minutes,
+                "goal": record.goal,
+            },
+        )
+        return {"item": self._serialize_learning_session(record)}
+
+    def update_learning_session_payload(self, session_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        session = self.runtime_store.get_learning_session(session_id)
+        if session.status != "active":
+            raise ValueError("learning_session_not_active")
+        fields: Dict[str, Any] = {}
+        for key in ["title", "goal", "subject", "summary", "blockers", "next_step"]:
+            if key in body:
+                fields[key] = str(body.get(key, "") or "").strip()
+        if "mode" in body:
+            fields["mode"] = self._validate_learning_mode(str(body.get("mode", "") or ""))
+        if "planned_minutes" in body:
+            fields["planned_minutes"] = max(1, int(body.get("planned_minutes", 1) or 1))
+        if "pomodoro_count" in body:
+            fields["pomodoro_count"] = max(0, int(body.get("pomodoro_count", 0) or 0))
+        updated = self.runtime_store.update_learning_session(session_id, fields)
+        return {"item": self._serialize_learning_session(updated)}
+
+    def complete_learning_session_payload(self, session_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        session = self.runtime_store.get_learning_session(session_id)
+        ended_at = str(body.get("ended_at", "") or "").strip() or datetime.utcnow().isoformat()
+        actual_minutes = body.get("actual_minutes")
+        actual_value = (
+            max(0, int(actual_minutes))
+            if actual_minutes not in {None, ""}
+            else self._calculate_actual_minutes(session.started_at, ended_at)
+        )
+        updated = self.runtime_store.transition_learning_session(
+            session_id=session_id,
+            target_status="completed",
+            ended_at=ended_at,
+            summary=str(body.get("summary", "") or "").strip(),
+            blockers=str(body.get("blockers", "") or "").strip(),
+            next_step=str(body.get("next_step", "") or "").strip(),
+            actual_minutes=actual_value,
+        )
+        checkin_payload = body.get("end_checkin")
+        if isinstance(checkin_payload, dict):
+            self.add_wellbeing_checkin_payload(session_id, {"stage": "end", **checkin_payload})
+        # Optional completion-summary integration for active_memory refresh.
+        summary_line = str(updated.summary or "").strip() or str(updated.goal or "").strip() or str(updated.title or "").strip()
+        memory_text = f"学习会话完成[{updated.mode}] {updated.subject or updated.title}: {summary_line}"
+        if updated.blockers:
+            memory_text += f"；阻碍: {updated.blockers}"
+        if updated.next_step:
+            memory_text += f"；下一步: {updated.next_step}"
+        self.memory_store.upsert_memory(
+            memory_id=f"learning_session::{updated.session_id}",
+            key=f"学习会话 {updated.subject or updated.title}",
+            content=memory_text,
+            memory_kind="long_term",
+            category="learning_session",
+            importance=0.5,
+            session_id=updated.session_id,
+        )
+        self._refresh_active_memory()
+        self._record_event(
+            "learning_session_completed",
+            {
+                "session_id": updated.session_id,
+                "actual_minutes": updated.actual_minutes,
+                "mode": updated.mode,
+            },
+        )
+        return {"item": self._serialize_learning_session(updated)}
+
+    def abandon_learning_session_payload(self, session_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        session = self.runtime_store.get_learning_session(session_id)
+        ended_at = str(body.get("ended_at", "") or "").strip() or datetime.utcnow().isoformat()
+        actual_minutes = body.get("actual_minutes")
+        actual_value = (
+            max(0, int(actual_minutes))
+            if actual_minutes not in {None, ""}
+            else self._calculate_actual_minutes(session.started_at, ended_at)
+        )
+        updated = self.runtime_store.transition_learning_session(
+            session_id=session_id,
+            target_status="abandoned",
+            ended_at=ended_at,
+            blockers=str(body.get("blockers", "") or "").strip(),
+            next_step=str(body.get("next_step", "") or "").strip(),
+            summary=str(body.get("summary", "") or "").strip(),
+            actual_minutes=actual_value,
+        )
+        checkin_payload = body.get("end_checkin")
+        if isinstance(checkin_payload, dict):
+            self.add_wellbeing_checkin_payload(session_id, {"stage": "end", **checkin_payload})
+        self._record_event(
+            "learning_session_abandoned",
+            {
+                "session_id": updated.session_id,
+                "actual_minutes": updated.actual_minutes,
+                "mode": updated.mode,
+            },
+        )
+        return {"item": self._serialize_learning_session(updated)}
+
+    def add_wellbeing_checkin_payload(self, session_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        stage = str(body.get("stage", "") or "").strip().lower()
+        if stage not in {"start", "end"}:
+            raise ValueError("invalid_checkin_stage")
+        record = self.runtime_store.add_wellbeing_checkin(
+            checkin_id=f"wbc_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}",
+            session_id=session_id,
+            stage=stage,
+            energy_level=self._coerce_level(body.get("energy_level")),
+            focus_level=self._coerce_level(body.get("focus_level")),
+            mood_level=self._coerce_level(body.get("mood_level")),
+            body_state_level=self._coerce_level(body.get("body_state_level")),
+            stress_level=self._coerce_level(body.get("stress_level")),
+            note=str(body.get("note", "") or "").strip(),
+        )
+        self._record_event(
+            "learning_session_checkin",
+            {
+                "session_id": session_id,
+                "stage": record.stage,
+                "energy_level": record.energy_level,
+                "focus_level": record.focus_level,
+                "mood_level": record.mood_level,
+                "body_state_level": record.body_state_level,
+                "stress_level": record.stress_level,
+            },
+        )
+        return {"item": self._serialize_wellbeing_checkin(record)}
+
     def list_mcp_servers_payload(self) -> Dict[str, Any]:
         bridge_tools = []
         for item in self.tools.list_enabled():
@@ -1982,24 +2226,35 @@ class GatewayApp:
 
     def list_open_core_update_proposals(self, limit: int = 50) -> Dict[str, Any]:
         items = self.memory_store.list_core_updates(status="open", limit=limit)
+        return {"items": [self._serialize_core_update_proposal(item) for item in items]}
+
+    def _serialize_core_update_proposal(self, item: Any) -> Dict[str, Any]:
         return {
-            "items": [
-                {
-                    "id": item.id,
-                    "target_section": item.target_section,
-                    "proposed_content": item.proposed_content,
-                    "reason": item.reason,
-                    "source_context": item.source_context,
-                    "fingerprint": item.fingerprint,
-                    "proposal_type": item.proposal_type,
-                    "confidence": item.confidence,
-                    "status": item.status,
-                    "created_at": item.created_at,
-                    "updated_at": item.updated_at,
-                    "reviewed_at": item.reviewed_at,
-                }
-                for item in items
-            ]
+            "id": item.id,
+            "target_section": item.target_section,
+            "proposed_content": item.proposed_content,
+            "reason": item.reason,
+            "source_context": item.source_context,
+            "fingerprint": item.fingerprint,
+            "proposal_type": item.proposal_type,
+            "confidence": item.confidence,
+            "status": item.status,
+            "created_at": item.created_at,
+            "updated_at": item.updated_at,
+            "reviewed_at": item.reviewed_at,
+        }
+
+    def list_core_update_proposals(self, *, status: str = "open", limit: int = 50) -> Dict[str, Any]:
+        normalized_status = str(status or "open").strip().lower()
+        if normalized_status not in {"open", "approved", "rejected", "all"}:
+            normalized_status = "open"
+        items = self.memory_store.list_core_updates(
+            status="" if normalized_status == "all" else normalized_status,
+            limit=max(1, min(int(limit), 500)),
+        )
+        return {
+            "status": normalized_status,
+            "items": [self._serialize_core_update_proposal(item) for item in items],
         }
 
     def _core_section_memory_identity(self, section: str) -> tuple[str, str]:
@@ -2116,6 +2371,93 @@ class GatewayApp:
             {"decision": "rejected", "proposal_id": proposal_id, "target_section": proposal.target_section},
         )
         return {"ok": True, "proposal": {"id": updated.id, "status": updated.status, "reviewed_at": updated.reviewed_at}}
+
+    def digest_run_state_payload(self, history_limit: int = 10) -> Dict[str, Any]:
+        state = self._read_digest_run_state()
+        now_local = self._now_in_local_timezone()
+        local_date = now_local.strftime("%Y-%m-%d")
+        completed_today = (
+            str(state.get("id", "") or "") == local_date
+            and str(state.get("status", "") or "") == "success"
+        )
+        recent_events = self.runtime_store.list_events(limit=max(1, min(int(history_limit) * 10, 500)))
+        history = []
+        for event in recent_events:
+            if event.get("event_type") != "digest_run":
+                continue
+            payload = event.get("payload") or {}
+            history.append(
+                {
+                    "id": str(payload.get("id", "") or ""),
+                    "run_state": str(payload.get("run_state", "") or ""),
+                    "status": str(payload.get("status", "") or ""),
+                    "started_at": str(payload.get("started_at", "") or ""),
+                    "completed_at": str(payload.get("completed_at", "") or ""),
+                    "error_message": str(payload.get("error_message", "") or ""),
+                    "recorded_at": event.get("created_at", ""),
+                }
+            )
+            if len(history) >= max(1, min(int(history_limit), 100)):
+                break
+        return {
+            "local_date": local_date,
+            "completed_successfully_for_current_local_date": completed_today,
+            "latest": {
+                "id": str(state.get("id", "") or ""),
+                "run_state": str(state.get("run_state", "") or ""),
+                "status": str(state.get("status", "") or ""),
+                "started_at": str(state.get("started_at", "") or ""),
+                "completed_at": str(state.get("completed_at", "") or ""),
+                "error_message": str(state.get("error_message", "") or ""),
+            },
+            "history": history,
+        }
+
+    def _extract_markdown_sections(
+        self,
+        content: str,
+        *,
+        section_names: list[str],
+        per_section_char_limit: int = 1200,
+    ) -> Dict[str, str]:
+        lines = str(content or "").splitlines()
+        sections: Dict[str, list[str]] = {name: [] for name in section_names}
+        current = ""
+        for raw_line in lines:
+            line = str(raw_line)
+            if line.startswith("## "):
+                heading = line[3:].strip()
+                current = heading if heading in sections else ""
+                continue
+            if current:
+                sections[current].append(line)
+        bounded: Dict[str, str] = {}
+        for name in section_names:
+            text = "\n".join(sections.get(name, [])).strip()
+            if len(text) > per_section_char_limit:
+                text = text[: max(per_section_char_limit - 1, 0)].rstrip() + "…"
+            bounded[name] = text
+        return bounded
+
+    def memory_inspection_payload(self) -> Dict[str, Any]:
+        core_profile = self._read_text_file(self._core_memory_file())
+        active_memory = self._read_text_file(self._active_memory_file())
+        return {
+            "core_profile": {
+                "raw": core_profile,
+                "sections": self._extract_markdown_sections(
+                    core_profile,
+                    section_names=["About Her", "Relationship Core", "My Profile"],
+                ),
+            },
+            "active_memory": {
+                "raw": active_memory,
+                "sections": self._extract_markdown_sections(
+                    active_memory,
+                    section_names=["Current Status", "Purpose Context", "On the Horizon", "Others"],
+                ),
+            },
+        }
 
     def _categorize_core_update_target(self, item: Dict[str, Any]) -> str:
         category = str(item.get("category", "") or "").strip().lower()
@@ -2279,7 +2621,7 @@ class GatewayApp:
             f"更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "格式版本: active_memory.v2",
         ]
-        preferred_categories = {"preference", "promise", "anniversary", "identity", "relationship"}
+        preferred_categories = {"preference", "promise", "anniversary", "identity", "relationship", "learning_session"}
         recent_memories = self.memory_store.list_memories(
             limit=20, memory_kind="long_term"
         )
@@ -3289,6 +3631,38 @@ class RequestHandler(BaseHTTPRequestHandler):
                 query = parse_qs(parsed.query).get("q", [""])[0]
                 self._json(HTTPStatus.OK, app.search_memories_payload(query))
                 return
+            if parsed.path == "/api/review/proposals":
+                query = parse_qs(parsed.query)
+                status = query.get("status", ["open"])[0]
+                limit = int(query.get("limit", ["50"])[0] or "50")
+                self._json(HTTPStatus.OK, app.list_core_update_proposals(status=status, limit=limit))
+                return
+            if parsed.path == "/api/review/digest-state":
+                history_limit = int(parse_qs(parsed.query).get("history_limit", ["10"])[0] or "10")
+                self._json(HTTPStatus.OK, app.digest_run_state_payload(history_limit=history_limit))
+                return
+            if parsed.path == "/api/review/memory":
+                self._json(HTTPStatus.OK, app.memory_inspection_payload())
+                return
+            if parsed.path == "/api/learning-sessions/active":
+                self._json(HTTPStatus.OK, app.get_active_learning_session_payload())
+                return
+            if parsed.path == "/api/learning-sessions":
+                query = parse_qs(parsed.query)
+                status = query.get("status", [""])[0]
+                limit = int(query.get("limit", ["20"])[0] or "20")
+                self._json(HTTPStatus.OK, app.list_learning_sessions_payload(status=status, limit=limit))
+                return
+            if parsed.path.startswith("/api/learning-sessions/"):
+                tail = parsed.path.removeprefix("/api/learning-sessions/").strip("/")
+                if tail and "/" not in tail:
+                    self._json(HTTPStatus.OK, app.get_learning_session_payload(tail))
+                    return
+                if tail.endswith("/checkins"):
+                    session_id = tail[: -len("/checkins")]
+                    limit = int(parse_qs(parsed.query).get("limit", ["20"])[0] or "20")
+                    self._json(HTTPStatus.OK, app.list_wellbeing_checkins_payload(session_id, limit=limit))
+                    return
             if parsed.path == "/api/context":
                 self._json(HTTPStatus.OK, app.get_context_payload())
                 return
@@ -3354,6 +3728,35 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
                 self._json(HTTPStatus.OK, {"result": result})
                 return
+            if parsed.path.startswith("/api/review/proposals/"):
+                tail = parsed.path.removeprefix("/api/review/proposals/").strip("/")
+                proposal_id, _, operation = tail.partition("/")
+                if operation == "approve":
+                    result = app.approve_core_update_proposal(proposal_id)
+                    self._json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+                    return
+                if operation == "reject":
+                    result = app.reject_core_update_proposal(proposal_id)
+                    self._json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+                    return
+            if parsed.path == "/api/learning-sessions/start":
+                self._json(HTTPStatus.CREATED, app.create_learning_session_payload(body))
+                return
+            if parsed.path.startswith("/api/learning-sessions/"):
+                tail = parsed.path.removeprefix("/api/learning-sessions/").strip("/")
+                session_id, _, operation = tail.partition("/")
+                if operation == "update":
+                    self._json(HTTPStatus.OK, app.update_learning_session_payload(session_id, body))
+                    return
+                if operation == "complete":
+                    self._json(HTTPStatus.OK, app.complete_learning_session_payload(session_id, body))
+                    return
+                if operation == "abandon":
+                    self._json(HTTPStatus.OK, app.abandon_learning_session_payload(session_id, body))
+                    return
+                if operation == "checkins":
+                    self._json(HTTPStatus.CREATED, app.add_wellbeing_checkin_payload(session_id, body))
+                    return
             if parsed.path == "/api/chat/complete":
                 self._json(HTTPStatus.OK, app.chat_complete(body))
                 return
