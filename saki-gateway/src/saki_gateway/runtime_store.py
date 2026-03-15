@@ -41,6 +41,41 @@ class ReminderRecord:
     delivered_at: str = ""
 
 
+
+
+@dataclass
+class LearningSessionRecord:
+    session_id: str
+    title: str
+    goal: str
+    subject: str
+    mode: str
+    status: str
+    planned_minutes: int
+    pomodoro_count: int
+    started_at: str
+    ended_at: str
+    actual_minutes: int
+    summary: str
+    blockers: str
+    next_step: str
+    created_at: str
+    updated_at: str
+
+
+@dataclass
+class WellbeingCheckinRecord:
+    checkin_id: str
+    session_id: str
+    stage: str
+    energy_level: Optional[int]
+    focus_level: Optional[int]
+    mood_level: Optional[int]
+    body_state_level: Optional[int]
+    stress_level: Optional[int]
+    note: str
+    created_at: str
+
 class RuntimeStore:
     def __init__(self, db_path: Path, event_log_path: Path):
         self.db_path = db_path
@@ -118,6 +153,44 @@ class RuntimeStore:
 
             CREATE INDEX IF NOT EXISTS idx_reminders_trigger
             ON reminders(status, trigger_at);
+
+            CREATE TABLE IF NOT EXISTS learning_sessions (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL DEFAULT '',
+              goal TEXT NOT NULL DEFAULT '',
+              subject TEXT NOT NULL DEFAULT '',
+              mode TEXT NOT NULL DEFAULT 'focus',
+              status TEXT NOT NULL DEFAULT 'active',
+              planned_minutes INTEGER NOT NULL DEFAULT 25,
+              pomodoro_count INTEGER NOT NULL DEFAULT 0,
+              started_at TEXT NOT NULL DEFAULT '',
+              ended_at TEXT NOT NULL DEFAULT '',
+              actual_minutes INTEGER NOT NULL DEFAULT 0,
+              summary TEXT NOT NULL DEFAULT '',
+              blockers TEXT NOT NULL DEFAULT '',
+              next_step TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_learning_sessions_status_updated
+            ON learning_sessions(status, updated_at DESC);
+
+            CREATE TABLE IF NOT EXISTS wellbeing_checkins (
+              id TEXT PRIMARY KEY,
+              session_id TEXT NOT NULL,
+              stage TEXT NOT NULL,
+              energy_level INTEGER,
+              focus_level INTEGER,
+              mood_level INTEGER,
+              body_state_level INTEGER,
+              stress_level INTEGER,
+              note TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_wellbeing_checkins_session_created
+            ON wellbeing_checkins(session_id, created_at DESC);
 
             CREATE TABLE IF NOT EXISTS gateway_events (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -524,6 +597,208 @@ class RuntimeStore:
             self.conn.commit()
         return cursor.rowcount > 0
 
+    def get_active_learning_session(self) -> Optional[LearningSessionRecord]:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM learning_sessions WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1"
+            ).fetchone()
+        return self._row_to_learning_session(row) if row is not None else None
+
+    def create_learning_session(
+        self,
+        *,
+        session_id: str,
+        title: str,
+        goal: str,
+        subject: str,
+        mode: str,
+        planned_minutes: int,
+        pomodoro_count: int,
+        started_at: str,
+    ) -> LearningSessionRecord:
+        now = utcnow_iso()
+        with self._lock:
+            active = self.conn.execute(
+                "SELECT id FROM learning_sessions WHERE status = 'active' LIMIT 1"
+            ).fetchone()
+            if active is not None:
+                raise ValueError("active_learning_session_exists")
+            self.conn.execute(
+                """
+                INSERT INTO learning_sessions(
+                  id, title, goal, subject, mode, status, planned_minutes, pomodoro_count,
+                  started_at, ended_at, actual_minutes, summary, blockers, next_step, created_at, updated_at
+                ) VALUES(?, ?, ?, ?, ?, 'active', ?, ?, ?, '', 0, '', '', '', ?, ?)
+                """,
+                (
+                    session_id,
+                    title,
+                    goal,
+                    subject,
+                    mode,
+                    planned_minutes,
+                    pomodoro_count,
+                    started_at,
+                    now,
+                    now,
+                ),
+            )
+            self.conn.commit()
+        return self.get_learning_session(session_id)
+
+    def get_learning_session(self, session_id: str) -> LearningSessionRecord:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM learning_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError("learning session not found")
+        return self._row_to_learning_session(row)
+
+    def list_learning_sessions(self, *, status: str = "", limit: int = 20) -> List[LearningSessionRecord]:
+        with self._lock:
+            if status:
+                rows = self.conn.execute(
+                    "SELECT * FROM learning_sessions WHERE status = ? ORDER BY updated_at DESC LIMIT ?",
+                    (status, limit),
+                ).fetchall()
+            else:
+                rows = self.conn.execute(
+                    "SELECT * FROM learning_sessions ORDER BY updated_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+        return [self._row_to_learning_session(row) for row in rows]
+
+    def update_learning_session(self, session_id: str, fields: Dict[str, Any]) -> LearningSessionRecord:
+        allowed_fields = {"title", "goal", "subject", "mode", "planned_minutes", "pomodoro_count", "summary", "blockers", "next_step"}
+        assignments = []
+        values: List[Any] = []
+        for key, value in fields.items():
+            if key not in allowed_fields:
+                continue
+            assignments.append(f"{key} = ?")
+            values.append(value)
+        if not assignments:
+            return self.get_learning_session(session_id)
+        now = utcnow_iso()
+        with self._lock:
+            values.extend([now, session_id])
+            self.conn.execute(
+                f"UPDATE learning_sessions SET {', '.join(assignments)}, updated_at = ? WHERE id = ?",
+                tuple(values),
+            )
+            self.conn.commit()
+        return self.get_learning_session(session_id)
+
+    def transition_learning_session(
+        self,
+        *,
+        session_id: str,
+        target_status: str,
+        ended_at: str = "",
+        summary: str = "",
+        blockers: str = "",
+        next_step: str = "",
+        actual_minutes: Optional[int] = None,
+    ) -> LearningSessionRecord:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM learning_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError("learning session not found")
+            current_status = str(row["status"] or "")
+            if current_status != "active":
+                raise ValueError("learning_session_not_active")
+            now = utcnow_iso()
+            final_ended_at = ended_at or now
+            final_actual_minutes = int(actual_minutes if actual_minutes is not None else row["actual_minutes"] or 0)
+            self.conn.execute(
+                """
+                UPDATE learning_sessions
+                SET status = ?, ended_at = ?, actual_minutes = ?,
+                    summary = CASE WHEN ? != '' THEN ? ELSE summary END,
+                    blockers = CASE WHEN ? != '' THEN ? ELSE blockers END,
+                    next_step = CASE WHEN ? != '' THEN ? ELSE next_step END,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    target_status,
+                    final_ended_at,
+                    final_actual_minutes,
+                    summary,
+                    summary,
+                    blockers,
+                    blockers,
+                    next_step,
+                    next_step,
+                    now,
+                    session_id,
+                ),
+            )
+            self.conn.commit()
+        return self.get_learning_session(session_id)
+
+    def add_wellbeing_checkin(
+        self,
+        *,
+        checkin_id: str,
+        session_id: str,
+        stage: str,
+        energy_level: Optional[int] = None,
+        focus_level: Optional[int] = None,
+        mood_level: Optional[int] = None,
+        body_state_level: Optional[int] = None,
+        stress_level: Optional[int] = None,
+        note: str = "",
+    ) -> WellbeingCheckinRecord:
+        now = utcnow_iso()
+        with self._lock:
+            exists = self.conn.execute(
+                "SELECT id FROM learning_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            if exists is None:
+                raise KeyError("learning session not found")
+            self.conn.execute(
+                """
+                INSERT INTO wellbeing_checkins(
+                  id, session_id, stage, energy_level, focus_level, mood_level, body_state_level, stress_level, note, created_at
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    checkin_id,
+                    session_id,
+                    stage,
+                    energy_level,
+                    focus_level,
+                    mood_level,
+                    body_state_level,
+                    stress_level,
+                    note,
+                    now,
+                ),
+            )
+            self.conn.commit()
+        return self.get_wellbeing_checkin(checkin_id)
+
+    def get_wellbeing_checkin(self, checkin_id: str) -> WellbeingCheckinRecord:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM wellbeing_checkins WHERE id = ?", (checkin_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError("wellbeing checkin not found")
+        return self._row_to_wellbeing_checkin(row)
+
+    def list_wellbeing_checkins(self, *, session_id: str, limit: int = 20) -> List[WellbeingCheckinRecord]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM wellbeing_checkins WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
+                (session_id, limit),
+            ).fetchall()
+        return [self._row_to_wellbeing_checkin(row) for row in rows]
+
     def list_inactive_profiles(
         self,
         *,
@@ -581,6 +856,8 @@ class RuntimeStore:
                 "sessions": self._count("sessions"),
                 "reminders": self._count("reminders"),
                 "events": self._count("gateway_events"),
+                "learning_sessions": self._count("learning_sessions"),
+                "wellbeing_checkins": self._count("wellbeing_checkins"),
             }
 
     def _count(self, table: str) -> int:
@@ -680,6 +957,40 @@ class RuntimeStore:
             updated_at=str(row["updated_at"]),
             metadata=metadata,
             delivered_at=str(row["delivered_at"] or ""),
+        )
+
+    def _row_to_learning_session(self, row: sqlite3.Row) -> LearningSessionRecord:
+        return LearningSessionRecord(
+            session_id=str(row["id"]),
+            title=str(row["title"] or ""),
+            goal=str(row["goal"] or ""),
+            subject=str(row["subject"] or ""),
+            mode=str(row["mode"] or "focus"),
+            status=str(row["status"] or "active"),
+            planned_minutes=int(row["planned_minutes"] or 0),
+            pomodoro_count=int(row["pomodoro_count"] or 0),
+            started_at=str(row["started_at"] or ""),
+            ended_at=str(row["ended_at"] or ""),
+            actual_minutes=int(row["actual_minutes"] or 0),
+            summary=str(row["summary"] or ""),
+            blockers=str(row["blockers"] or ""),
+            next_step=str(row["next_step"] or ""),
+            created_at=str(row["created_at"] or ""),
+            updated_at=str(row["updated_at"] or ""),
+        )
+
+    def _row_to_wellbeing_checkin(self, row: sqlite3.Row) -> WellbeingCheckinRecord:
+        return WellbeingCheckinRecord(
+            checkin_id=str(row["id"]),
+            session_id=str(row["session_id"]),
+            stage=str(row["stage"] or ""),
+            energy_level=int(row["energy_level"]) if row["energy_level"] is not None else None,
+            focus_level=int(row["focus_level"]) if row["focus_level"] is not None else None,
+            mood_level=int(row["mood_level"]) if row["mood_level"] is not None else None,
+            body_state_level=int(row["body_state_level"]) if row["body_state_level"] is not None else None,
+            stress_level=int(row["stress_level"]) if row["stress_level"] is not None else None,
+            note=str(row["note"] or ""),
+            created_at=str(row["created_at"] or ""),
         )
 
     def _parse_time(self, value: str) -> datetime:
