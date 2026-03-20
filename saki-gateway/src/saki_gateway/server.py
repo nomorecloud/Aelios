@@ -1670,13 +1670,20 @@ class GatewayApp:
         wellbeing_items = self.list_wellbeing_checkins_payload(session_id, limit=1)["items"] if session_id else []
         wellbeing = wellbeing_items[0] if wellbeing_items else {}
         style = self.study_responder.normalize_style(self._effective_learning_response_style(session_id))
+        framework = self.study_responder.describe_framework(
+            session=self._serialize_learning_session(session) if session else {},
+            style=style,
+            wellbeing=wellbeing,
+        )
+        if session_id:
+            framework["inspection"] = {
+                "recent_events": self.list_learning_session_events_payload(session_id, limit=5)["items"],
+                "recent_responses": self.list_learning_session_responses_payload(session_id, limit=5)["items"],
+                "effective_style": asdict(style),
+            }
         return {
             "session_id": session_id,
-            "framework": self.study_responder.describe_framework(
-                session=self._serialize_learning_session(session) if session else {},
-                style=style,
-                wellbeing=wellbeing,
-            ),
+            "framework": framework,
         }
 
     def update_learning_response_style_payload(self, body: Dict[str, Any], session_id: str = "") -> Dict[str, Any]:
