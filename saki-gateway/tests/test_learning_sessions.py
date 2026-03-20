@@ -193,6 +193,23 @@ class LearningSessionTests(unittest.TestCase):
         event_types = [event["event_type"] for event in app.list_learning_session_events_payload(created["id"])["items"]]
         self.assertIn("low_energy_start", event_types)
 
+    def test_low_energy_start_response_prefers_stabilization(self) -> None:
+        app = self._make_app()
+        created = app.create_learning_session_payload(
+            {
+                "title": "英语复习",
+                "goal": "复习20个单词",
+                "mode": "recovery",
+                "planned_minutes": 10,
+                "start_checkin": {"energy_level": 1, "stress_level": 5, "note": "焦虑，快撑不住了"},
+            }
+        )["item"]
+        responses = app.list_learning_session_responses_payload(created["id"])["items"]
+        low_energy = next(resp for resp in responses if resp["event_type"] == "low_energy_start")
+        self.assertIn("最小", low_energy["message"])
+        self.assertTrue(low_energy["response_context"]["wellbeing_signal"]["overwhelmed"])
+        self.assertEqual(low_energy["response_context"]["style_effects"]["correction_tone"], "gentle_redirect")
+
     def test_style_config_affects_response_selection(self) -> None:
         app = self._make_app()
         item = self._start(app)
@@ -201,7 +218,7 @@ class LearningSessionTests(unittest.TestCase):
         app.update_learning_session_runtime_payload(item["id"], {"action": "paused_too_long"})
         responses = app.list_learning_session_responses_payload(item["id"])["items"]
         paused_too_long = next(resp for resp in responses if resp["event_type"] == "session_paused_too_long")
-        self.assertIn("不要继续往后拖", paused_too_long["message"])
+        self.assertTrue(any(fragment in paused_too_long["message"] for fragment in ["不要继续往后拖", "别再让停顿继续扩大", "别把重启这件事一直往后放"]))
 
     def test_firm_vs_caring_response_behavior(self) -> None:
         app = self._make_app()
@@ -217,7 +234,25 @@ class LearningSessionTests(unittest.TestCase):
         app.update_learning_session_runtime_payload(caring["id"], {"action": "paused_too_long"})
         caring_message = next(resp["message"] for resp in app.list_learning_session_responses_payload(caring["id"])["items"] if resp["event_type"] == "session_paused_too_long")
         self.assertNotEqual(firm_message, caring_message)
-        self.assertIn("体面收尾", caring_message)
+        self.assertTrue(any(fragment in caring_message for fragment in ["体面收尾", "目标降到更小", "直接好好收尾"]))
+
+    def test_repeated_event_responses_rotate_variants(self) -> None:
+        responder = StudyCompanionResponder()
+        style = responder.normalize_style(None)
+        first = responder.build_response_plan(
+            event_type="session_paused_too_long",
+            session={"mode": "focus", "goal": "做两道题"},
+            style=style,
+            recent_events=[],
+        )
+        second = responder.build_response_plan(
+            event_type="session_paused_too_long",
+            session={"mode": "focus", "goal": "做两道题"},
+            style=style,
+            recent_events=[{"event_type": "session_paused_too_long"}],
+        )
+        self.assertNotEqual(first.message, second.message)
+        self.assertEqual(second.debug["response_selection"]["selected_index"], 1)
 
     def test_safety_constraint_no_degrading_output(self) -> None:
         app = self._make_app()
@@ -268,6 +303,10 @@ class LearningSessionTests(unittest.TestCase):
         self.assertEqual(style["care_style"], "soft")
         self.assertIn("layered_persona", framework)
         self.assertEqual(responses[0]["response_context"]["safety"]["explicit_language_allowed"], False)
+        self.assertIn("inspection", framework)
+        self.assertEqual(framework["inspection"]["effective_style"]["care_style"], "soft")
+        self.assertGreaterEqual(len(framework["inspection"]["recent_events"]), 1)
+        self.assertGreaterEqual(len(framework["inspection"]["recent_responses"]), 1)
 
     def test_framework_is_persona_ready_without_custom_persona_content(self) -> None:
         app = self._make_app()

@@ -260,12 +260,14 @@ Supported event types in this slice:
 Flow:
 1. learning-session lifecycle or runtime control emits a lightweight event row
 2. the event is mirrored into the existing gateway event log for debugging
-3. the backend builds a short companion response from:
+3. the backend builds a short companion response from layered backend inputs:
    - event type
    - session mode
    - recent wellbeing/check-in context if available
+   - recent event history to avoid repeating the same line every time
    - effective response-style config
 4. the response is stored in `learning_session_responses` with `delivery_status=queued` and an inspectable `response_context` snapshot
+   - includes selected response-variant metadata, safety flags, and style effects for debugging/admin inspection
 
 This is intentionally backend-first so future chat insertion, banners, or notifications can reuse the same queue.
 
@@ -278,6 +280,10 @@ The response generator stays deliberately simple and inspectable. Each proactive
 - `safety_boundary_slot`: explicit study-safe boundary rules
 
 Current implementation uses neutral defaults only and leaves an explicit TODO hook for future custom persona injection.
+
+Additional notes:
+- The responder rotates through small per-event variant pools when the same event repeats in recent history, which keeps real-time nudges short without becoming mechanically repetitive.
+- Style remains inspectable as structured config (`style` + `style_effects`) rather than a hidden prompt blob.
 
 ### Response-style config
 Safe default style:
@@ -297,6 +303,9 @@ Supported dimensions:
 Notes:
 - Style is runtime/config behavior, not long-term identity memory.
 - Study mode does **not** automatically use sexual, intimate, or RP language.
+- `care_style` shifts how much reassurance/protective structure is used.
+- `dominance_style` and `correction_style` only affect brief redirect firmness inside study-safe boundaries.
+- `praise_style` changes acknowledgement intensity while staying non-intimate.
 - When wellbeing suggests exhaustion, anxiety, or physical strain, responses shift toward stabilization and smaller next steps.
 
 ### Minimal memory/digest-adjacent integration
@@ -308,6 +317,8 @@ Known limitations / TODO:
 - No polished timer/dashboard UI in this slice.
 - Responses are queued for inspection/future delivery, not yet inserted directly into the main chat timeline.
 - No advanced wellbeing analytics or scoring.
-- No per-mode overlay stack yet; current style overlay is `default` or per-session only.
+- No per-mode override persistence yet; current style overlay is `default` or per-session only.
+- Recent-event de-duplication is intentionally lightweight and template-driven, not full dialogue planning.
+- TODO: optional custom persona text should populate the existing layer slots instead of replacing the safety/event framework.
 - TODO: optional Trilium completion note output can be added later if needed.
 - TODO: hook the queued responses into a future web notification/chat insertion surface.
