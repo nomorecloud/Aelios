@@ -93,6 +93,26 @@ class LearningSessionTests(unittest.TestCase):
         self.assertIn("focus_completed", event_types)
         self.assertIn("break_completed", event_types)
 
+    def test_runtime_transition_validation_rejects_out_of_order_actions(self) -> None:
+        app = self._make_app()
+        item = self._start(app)
+        with self.assertRaises(ValueError):
+            app.update_learning_session_runtime_payload(item["id"], {"action": "break_started"})
+        app.update_learning_session_runtime_payload(item["id"], {"action": "focus_completed", "elapsed_minutes": 15, "remaining_minutes": 0})
+        with self.assertRaises(ValueError):
+            app.update_learning_session_runtime_payload(item["id"], {"action": "resume"})
+
+    def test_runtime_event_payload_includes_state_transition_metadata(self) -> None:
+        app = self._make_app()
+        item = self._start(app)
+        app.update_learning_session_runtime_payload(item["id"], {"action": "focus_completed", "elapsed_minutes": 15, "remaining_minutes": 0})
+        event = app.list_learning_session_events_payload(item["id"])["items"][0]
+        self.assertEqual(event["event_type"], "focus_completed")
+        self.assertEqual(event["payload"]["from_state"], "focus")
+        self.assertEqual(event["payload"]["to_state"], "focus_completed")
+        response = app.list_learning_session_responses_payload(item["id"])["items"][0]
+        self.assertEqual(response["response_context"]["event_type"], "focus_completed")
+
     def test_complete_learning_session(self) -> None:
         app = self._make_app()
         item = self._start(app)
