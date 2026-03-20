@@ -234,7 +234,7 @@ class LearningSessionTests(unittest.TestCase):
         self.assertEqual(payload["session_id"], created["id"])
         self.assertEqual(len(payload["items"]), 2)
 
-    def test_inspection_lists_events_responses_and_style(self) -> None:
+    def test_inspection_lists_events_responses_style_and_framework(self) -> None:
         app = self._make_app()
         created = self._start(app)
         app.update_learning_response_style_payload({"care_style": "soft"}, session_id=created["id"])
@@ -242,9 +242,20 @@ class LearningSessionTests(unittest.TestCase):
         events = app.list_learning_session_events_payload(created["id"])["items"]
         responses = app.list_learning_session_responses_payload(created["id"])["items"]
         style = app.get_learning_response_style_payload(created["id"])["style"]
+        framework = app.get_learning_response_framework_payload(created["id"])["framework"]
         self.assertGreaterEqual(len(events), 2)
         self.assertGreaterEqual(len(responses), 1)
         self.assertEqual(style["care_style"], "soft")
+        self.assertIn("layered_persona", framework)
+        self.assertEqual(responses[0]["response_context"]["safety"]["explicit_language_allowed"], False)
+
+    def test_framework_is_persona_ready_without_custom_persona_content(self) -> None:
+        app = self._make_app()
+        created = self._start(app, mode="review")
+        framework = app.get_learning_response_framework_payload(created["id"])["framework"]
+        self.assertEqual(framework["layered_persona"]["base_persona_slot"], "neutral_companion")
+        self.assertEqual(framework["mode_overlay"], "study_review")
+        self.assertIn("Future persona injection", framework["todo"])
 
 
 if __name__ == "__main__":

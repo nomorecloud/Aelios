@@ -90,6 +90,7 @@ class LearningSessionResponseRecord:
     event_type: str
     message: str
     style_config: Dict[str, Any]
+    response_context: Dict[str, Any]
     delivery_status: str
     created_at: str
 
@@ -261,6 +262,7 @@ class RuntimeStore:
               event_type TEXT NOT NULL,
               message TEXT NOT NULL,
               style_config TEXT NOT NULL DEFAULT '{}',
+              response_context TEXT NOT NULL DEFAULT '{}',
               delivery_status TEXT NOT NULL DEFAULT 'queued',
               created_at TEXT NOT NULL
             );
@@ -301,6 +303,7 @@ class RuntimeStore:
             self._ensure_column("learning_sessions", "short_break_minutes", "INTEGER NOT NULL DEFAULT 5")
             self._ensure_column("learning_sessions", "long_break_minutes", "INTEGER NOT NULL DEFAULT 15")
             self._ensure_column("learning_sessions", "pause_started_at", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("learning_session_responses", "response_context", "TEXT NOT NULL DEFAULT '{}'")
             self.conn.commit()
 
     def _ensure_column(self, table: str, column: str, definition: str) -> None:
@@ -957,14 +960,15 @@ class RuntimeStore:
         event_type: str,
         message: str,
         style_config: Optional[Dict[str, Any]] = None,
+        response_context: Optional[Dict[str, Any]] = None,
         delivery_status: str = "queued",
     ) -> LearningSessionResponseRecord:
         now = utcnow_iso()
         with self._lock:
             cursor = self.conn.execute(
                 """
-                INSERT INTO learning_session_responses(session_id, event_id, event_type, message, style_config, delivery_status, created_at)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO learning_session_responses(session_id, event_id, event_type, message, style_config, response_context, delivery_status, created_at)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session_id,
@@ -972,6 +976,7 @@ class RuntimeStore:
                     event_type,
                     message,
                     json.dumps(style_config or {}, ensure_ascii=False),
+                    json.dumps(response_context or {}, ensure_ascii=False),
                     delivery_status,
                     now,
                 ),
@@ -1300,6 +1305,10 @@ class RuntimeStore:
             style_config = json.loads(str(row["style_config"] or "{}"))
         except json.JSONDecodeError:
             style_config = {}
+        try:
+            response_context = json.loads(str(row["response_context"] or "{}"))
+        except json.JSONDecodeError:
+            response_context = {}
         return LearningSessionResponseRecord(
             response_id=int(row["id"]),
             session_id=str(row["session_id"] or ""),
@@ -1307,6 +1316,7 @@ class RuntimeStore:
             event_type=str(row["event_type"] or ""),
             message=str(row["message"] or ""),
             style_config=style_config,
+            response_context=response_context,
             delivery_status=str(row["delivery_status"] or ""),
             created_at=str(row["created_at"] or ""),
         )
