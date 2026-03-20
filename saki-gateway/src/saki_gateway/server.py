@@ -1592,6 +1592,31 @@ class GatewayApp:
         delta = ended - started
         return max(0, int(delta.total_seconds() // 60))
 
+    def _next_learning_runtime_transition(self, session: Any, action: str) -> Dict[str, Any]:
+        current = str(session.runtime_state or "focus")
+        transitions = {
+            "pause": {"from": {"focus"}, "to": "paused", "event": "session_paused"},
+            "resume": {"from": {"paused"}, "to": "focus", "event": "session_resumed"},
+            "focus_completed": {"from": {"focus"}, "to": "focus_completed", "event": "focus_completed"},
+            "break_started": {"from": {"focus_completed"}, "to": "break", "event": "break_started"},
+            "break_completed": {
+                "from": {"break"},
+                "to": "focus",
+                "event": "recovery_completion" if session.mode == "recovery" else "break_completed",
+            },
+            "paused_too_long": {"from": {"paused"}, "to": current, "event": "session_paused_too_long"},
+        }
+        transition = transitions.get(action)
+        if transition is None:
+            raise ValueError("invalid_learning_runtime_action")
+        if current not in transition["from"]:
+            raise ValueError(f"invalid_learning_runtime_transition:{action}:{current}")
+        return {
+            "from_state": current,
+            "to_state": transition["to"],
+            "event_type": transition["event"],
+        }
+
     def list_learning_sessions_payload(self, status: str = "", limit: int = 20) -> Dict[str, Any]:
         normalized_status = str(status or "").strip().lower()
         if normalized_status and normalized_status not in {"active", "completed", "abandoned"}:
@@ -1719,16 +1744,17 @@ class GatewayApp:
         elapsed = max(0, int(body.get("elapsed_minutes", session.elapsed_minutes) or 0))
         remaining = max(0, int(body.get("remaining_minutes", session.remaining_minutes) or 0))
         recent_checkin = self.list_wellbeing_checkins_payload(session_id, limit=1)["items"]
+        transition = self._next_learning_runtime_transition(session, action)
+        event_payload: Dict[str, Any] = {
+            "from_state": transition["from_state"],
+            "to_state": transition["to_state"],
+        }
         if action == "pause":
-            if session.runtime_state == "paused":
-                raise ValueError("learning_session_already_paused")
             updated = self.runtime_store.set_learning_session_runtime_state(session_id, runtime_state="paused", pause_started_at=now, elapsed_minutes=elapsed, remaining_minutes=remaining)
-            self._emit_learning_session_event(session_id, "session_paused", {"elapsed_minutes": elapsed, "remaining_minutes": remaining})
+            event_payload.update({"elapsed_minutes": elapsed, "remaining_minutes": remaining})
         elif action == "resume":
-            if session.runtime_state != "paused":
-                raise ValueError("learning_session_not_paused")
             updated = self.runtime_store.set_learning_session_runtime_state(session_id, runtime_state="focus", pause_started_at="", elapsed_minutes=elapsed, remaining_minutes=remaining)
-            self._emit_learning_session_event(session_id, "session_resumed", {"elapsed_minutes": elapsed, "remaining_minutes": remaining})
+            event_payload.update({"elapsed_minutes": elapsed, "remaining_minutes": remaining})
         elif action == "focus_completed":
             updated = self.runtime_store.set_learning_session_runtime_state(
                 session_id,
@@ -1738,21 +1764,17 @@ class GatewayApp:
                 remaining_minutes=remaining,
                 pomodoro_count=max(session.pomodoro_count, int(body.get("pomodoro_count", session.pomodoro_count) or 0)),
             )
-            self._emit_learning_session_event(session_id, "focus_completed", {"elapsed_minutes": elapsed, "remaining_minutes": remaining})
+            event_payload.update({"elapsed_minutes": elapsed, "remaining_minutes": remaining})
         elif action == "break_started":
             updated = self.runtime_store.set_learning_session_runtime_state(session_id, runtime_state="break", pause_started_at="", elapsed_minutes=elapsed, remaining_minutes=remaining, break_count=session.break_count + 1)
-            self._emit_learning_session_event(session_id, "break_started", {"break_count": updated.break_count})
+            event_payload.update({"break_count": updated.break_count})
         elif action == "break_completed":
             updated = self.runtime_store.set_learning_session_runtime_state(session_id, runtime_state="focus", pause_started_at="", elapsed_minutes=elapsed, remaining_minutes=remaining)
-            event_type = "recovery_completion" if session.mode == "recovery" else "break_completed"
-            self._emit_learning_session_event(session_id, event_type, {"break_count": updated.break_count})
-        elif action == "paused_too_long":
-            if session.runtime_state != "paused":
-                raise ValueError("learning_session_not_paused")
-            updated = session
-            self._emit_learning_session_event(session_id, "session_paused_too_long", {"pause_started_at": session.pause_started_at})
+            event_payload.update({"break_count": updated.break_count})
         else:
-            raise ValueError("invalid_learning_runtime_action")
+            updated = session
+            event_payload.update({"pause_started_at": session.pause_started_at})
+        self._emit_learning_session_event(session_id, transition["event_type"], event_payload)
         if recent_checkin and action == "focus_completed" and recent_checkin[0].get("energy_level", 5) <= 2:
             pass
         return {"item": self._serialize_learning_session(updated)}
