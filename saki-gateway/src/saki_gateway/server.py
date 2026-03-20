@@ -1484,6 +1484,7 @@ class GatewayApp:
             "event_type": record.event_type,
             "message": record.message,
             "style_config": record.style_config,
+            "response_context": record.response_context,
             "delivery_status": record.delivery_status,
             "created_at": record.created_at,
         }
@@ -1519,7 +1520,7 @@ class GatewayApp:
         wellbeing_items = self.list_wellbeing_checkins_payload(session.session_id, limit=3)["items"]
         wellbeing = wellbeing_items[0] if wellbeing_items else {}
         style = self._effective_learning_response_style(session.session_id)
-        message = self.study_responder.build_message(
+        plan = self.study_responder.build_response_plan(
             event_type=event_record.event_type,
             session=self._serialize_learning_session(session),
             style=self.study_responder.normalize_style(style),
@@ -1530,8 +1531,9 @@ class GatewayApp:
             session_id=session.session_id,
             event_id=event_record.event_id,
             event_type=event_record.event_type,
-            message=message,
+            message=plan.message,
             style_config=style,
+            response_context=plan.debug,
             delivery_status="queued",
         )
         return self._serialize_learning_session_response(response)
@@ -1637,6 +1639,20 @@ class GatewayApp:
 
     def get_learning_response_style_payload(self, session_id: str = "") -> Dict[str, Any]:
         return {"session_id": session_id, "style": self._effective_learning_response_style(session_id)}
+
+    def get_learning_response_framework_payload(self, session_id: str = "") -> Dict[str, Any]:
+        session = self.runtime_store.get_learning_session(session_id) if session_id else None
+        wellbeing_items = self.list_wellbeing_checkins_payload(session_id, limit=1)["items"] if session_id else []
+        wellbeing = wellbeing_items[0] if wellbeing_items else {}
+        style = self.study_responder.normalize_style(self._effective_learning_response_style(session_id))
+        return {
+            "session_id": session_id,
+            "framework": self.study_responder.describe_framework(
+                session=self._serialize_learning_session(session) if session else {},
+                style=style,
+                wellbeing=wellbeing,
+            ),
+        }
 
     def update_learning_response_style_payload(self, body: Dict[str, Any], session_id: str = "") -> Dict[str, Any]:
         style = self.study_responder.normalize_style(body).__dict__
@@ -3817,6 +3833,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/learning-sessions/style":
                 session_id = parse_qs(parsed.query).get("session_id", [""])[0]
                 self._json(HTTPStatus.OK, app.get_learning_response_style_payload(session_id=session_id))
+                return
+            if parsed.path == "/api/learning-sessions/framework":
+                session_id = parse_qs(parsed.query).get("session_id", [""])[0]
+                self._json(HTTPStatus.OK, app.get_learning_response_framework_payload(session_id=session_id))
                 return
             if parsed.path.startswith("/api/learning-sessions/"):
                 tail = parsed.path.removeprefix("/api/learning-sessions/").strip("/")

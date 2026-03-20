@@ -190,6 +190,7 @@ This slice adds a backend-first learning-session flow focused on sustainable stu
   - inspectable lifecycle/runtime events emitted by the backend
 - `learning_session_responses`
   - queued proactive companion messages linked to learning events
+  - includes `response_context` for inspectable layered defaults, safety settings, and recent signal snapshots
 - `learning_response_styles`
   - lightweight runtime response-style overrides (`default` or per-session scope)
 
@@ -234,6 +235,7 @@ Authenticated dashboard API routes:
 - `GET /api/learning-sessions/{session_id}/responses?limit=20`
 - `GET /api/learning-sessions/style?session_id=`
 - `POST /api/learning-sessions/style?session_id=`
+- `GET /api/learning-sessions/framework?session_id=`
 
 ### Check-in behavior
 - `stage` supports `start | end`.
@@ -263,9 +265,19 @@ Flow:
    - session mode
    - recent wellbeing/check-in context if available
    - effective response-style config
-4. the response is stored in `learning_session_responses` with `delivery_status=queued`
+4. the response is stored in `learning_session_responses` with `delivery_status=queued` and an inspectable `response_context` snapshot
 
 This is intentionally backend-first so future chat insertion, banners, or notifications can reuse the same queue.
+
+### Layered persona-ready response architecture
+The response generator stays deliberately simple and inspectable. Each proactive message is planned from separable layers instead of one giant injected prompt:
+
+- `base_persona_slot`: safe neutral companion default in this slice
+- `context_overlay_slot`: study/recovery/review-ready insertion point
+- `event_response_style_slot`: short real-time response behavior
+- `safety_boundary_slot`: explicit study-safe boundary rules
+
+Current implementation uses neutral defaults only and leaves an explicit TODO hook for future custom persona injection.
 
 ### Response-style config
 Safe default style:
