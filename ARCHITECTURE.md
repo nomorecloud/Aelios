@@ -1229,6 +1229,26 @@ Reminder scheduler
 
 ### Phase 4: 主动性与生态
 
+Current learning-companion backend slices in this repository:
+- B1: learning-session foundation
+- B2: event-triggered companion responses
+- B3: recovery-aware intervention
+- B4: progress summaries / trends
+- B5: minimal study UI
+
+B4 scope (backend-first):
+- compute lightweight recent study summaries over rolling windows such as 7 / 14 / 30 days
+- derive focus/review/recovery balance from SQLite session/runtime data
+- extract small rule-based friction patterns with explicit rule traces
+- generate short readable summary text for admin/debug inspection
+- expose optional future digest/memory hooks without automatic long-term writes
+- leave polished study UI surfacing beyond the minimal B5 slice for later iterations
+
+B5 scope (minimal web/admin surface):
+- expose the current learning-session state and basic controls in the existing web dashboard
+- reuse B1/B2/B3/B4 endpoints for session actions, check-ins, response inspection, and progress summaries
+- keep the UI readable, backend-aligned, and operator-friendly rather than turning it into a separate study product
+
 - 飞书主动消息
 - NapCat QQ channel
 - Notion 异步同步

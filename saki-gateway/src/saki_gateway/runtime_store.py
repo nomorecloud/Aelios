@@ -784,6 +784,59 @@ class RuntimeStore:
                 ).fetchall()
         return [self._row_to_learning_session(row) for row in rows]
 
+
+    def list_learning_sessions_in_window(
+        self,
+        *,
+        start_at: str,
+        end_at: str,
+        limit: int = 200,
+    ) -> List[LearningSessionRecord]:
+        with self._lock:
+            rows = self.conn.execute(
+                """
+                SELECT * FROM learning_sessions
+                WHERE (CASE WHEN started_at != '' THEN started_at ELSE created_at END) >= ?
+                  AND (CASE WHEN started_at != '' THEN started_at ELSE created_at END) <= ?
+                ORDER BY (CASE WHEN started_at != '' THEN started_at ELSE created_at END) DESC
+                LIMIT ?
+                """,
+                (start_at, end_at, limit),
+            ).fetchall()
+        return [self._row_to_learning_session(row) for row in rows]
+
+    def list_learning_sessions_recent(self, *, limit: int = 50) -> List[LearningSessionRecord]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM learning_sessions ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [self._row_to_learning_session(row) for row in rows]
+
+    def list_learning_session_events_for_sessions(self, *, session_ids: List[str]) -> List[LearningSessionEventRecord]:
+        normalized = [item for item in session_ids if item]
+        if not normalized:
+            return []
+        placeholders = ",".join("?" for _ in normalized)
+        with self._lock:
+            rows = self.conn.execute(
+                f"SELECT * FROM learning_session_events WHERE session_id IN ({placeholders}) ORDER BY id DESC",
+                tuple(normalized),
+            ).fetchall()
+        return [self._row_to_learning_session_event(row) for row in rows]
+
+    def list_wellbeing_checkins_for_sessions(self, *, session_ids: List[str]) -> List[WellbeingCheckinRecord]:
+        normalized = [item for item in session_ids if item]
+        if not normalized:
+            return []
+        placeholders = ",".join("?" for _ in normalized)
+        with self._lock:
+            rows = self.conn.execute(
+                f"SELECT * FROM wellbeing_checkins WHERE session_id IN ({placeholders}) ORDER BY created_at DESC",
+                tuple(normalized),
+            ).fetchall()
+        return [self._row_to_wellbeing_checkin(row) for row in rows]
+
     def update_learning_session(self, session_id: str, fields: Dict[str, Any]) -> LearningSessionRecord:
         allowed_fields = {
             "title",
