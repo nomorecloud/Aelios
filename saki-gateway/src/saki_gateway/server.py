@@ -1526,6 +1526,7 @@ class GatewayApp:
             style=self.study_responder.normalize_style(style),
             wellbeing=wellbeing,
             recent_events=[self._serialize_learning_session_event(item) for item in self.runtime_store.list_learning_session_events(session_id=session.session_id, limit=5)],
+            recent_responses=[self._serialize_learning_session_response(item) for item in self.runtime_store.list_learning_session_responses(session_id=session.session_id, limit=5)],
         )
         response = self.runtime_store.add_learning_session_response(
             session_id=session.session_id,
@@ -1670,16 +1671,30 @@ class GatewayApp:
         wellbeing_items = self.list_wellbeing_checkins_payload(session_id, limit=1)["items"] if session_id else []
         wellbeing = wellbeing_items[0] if wellbeing_items else {}
         style = self.study_responder.normalize_style(self._effective_learning_response_style(session_id))
+        recent_events = self.list_learning_session_events_payload(session_id, limit=5)["items"] if session_id else []
+        recent_responses = self.list_learning_session_responses_payload(session_id, limit=5)["items"] if session_id else []
         framework = self.study_responder.describe_framework(
             session=self._serialize_learning_session(session) if session else {},
             style=style,
             wellbeing=wellbeing,
+            recent_events=recent_events,
+            recent_responses=recent_responses,
         )
         if session_id:
             framework["inspection"] = {
-                "recent_events": self.list_learning_session_events_payload(session_id, limit=5)["items"],
-                "recent_responses": self.list_learning_session_responses_payload(session_id, limit=5)["items"],
+                "recent_events": recent_events,
+                "recent_responses": recent_responses,
                 "effective_style": asdict(style),
+                "derived_recovery_state": framework.get("recovery_state", {}),
+                "recent_adapted_behaviors": [
+                    {
+                        "event_type": item.get("event_type", ""),
+                        "recovery_state": ((item.get("response_context") or {}).get("recovery_state") or {}).get("state", "stable"),
+                        "next_step": ((item.get("response_context") or {}).get("next_step") or {}).get("category", ""),
+                        "adapted_behavior": ((item.get("response_context") or {}).get("adaptation") or {}).get("adapted_behavior", ""),
+                    }
+                    for item in recent_responses
+                ],
             }
         return {
             "session_id": session_id,
