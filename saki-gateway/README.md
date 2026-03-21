@@ -236,6 +236,90 @@ Authenticated dashboard API routes:
 - `GET /api/learning-sessions/style?session_id=`
 - `POST /api/learning-sessions/style?session_id=`
 - `GET /api/learning-sessions/framework?session_id=`
+- `GET /api/learning-sessions/progress?window_days=7&session_limit=50`
+- `GET /api/learning-sessions/progress?windows=7,14,30&session_limit=50`
+
+### Progress summaries and trend inspection (B4)
+B4 adds a backend-first, SQLite-derived summary layer for recent study behavior. It is intentionally small, inspectable, and rule-based rather than a heavy analytics system.
+
+Current summary windows:
+- `last 7 days`
+- `last 14 days`
+- `last 30 days`
+- optional recent payload limiting via `session_limit`
+
+Computed metric groups:
+- session counts: started / completed / abandoned
+- total focus minutes, review minutes, recovery minutes
+- completion rate and average completed-session length
+- pause/resume friction counts plus a small explicit friction score
+- low-energy start counts and recovery-needed signal counts
+- repeated blocker text extraction from `blockers` fields
+
+Focus-vs-recovery balance:
+- derived from session mode + session minutes
+- prefers `actual_minutes`, then `elapsed_minutes`, then `planned_minutes`
+- returns totals, ratios, and approximation notes so the output stays inspectable
+
+Minimal friction/blocker pattern rules:
+- frequent long pauses
+- repeated abandoned sessions
+- repeated low-energy starts
+- recovery-needed signal spikes
+- many short incomplete focus attempts
+- strain after multiple pomodoros when recent events support it
+
+Each pattern includes:
+- short human-readable label
+- explicit reason
+- `rule_trace` with the triggering heuristic and matched sessions
+
+Summary text outputs:
+- `weekly_summary`
+- `recent_pattern_summary`
+- `momentum_check`
+- `blocker_focus_balance_note`
+
+Inspection payload shape:
+- `window`: effective label/date range/session limit
+- `metrics`: raw trend metrics
+- `focus_balance`: totals + ratios + approximation notes
+- `friction_patterns`: fired rules with traces
+- `summary_text`: short generated backend summaries
+- `memory_digest_hook`: optional future-facing integration hook without automatic long-term memory writes
+- `inspection`: source metadata (`computed_on_read`, source counts, session ids)
+
+Known limitations for B4:
+- summaries are computed on read, not stored as a historical fact table
+- timing is session-level, not second-by-second timer analytics
+- pause friction only uses explicit runtime events, not background app inactivity
+- blocker extraction is simple text splitting, not semantic clustering
+- B4 exposes a safe hook for future digest/memory use, but does not auto-write long-term memory from trend summaries
+- richer UI surfacing belongs in a future B5 minimal study UI slice
+
+### Minimal study UI (B5)
+B5 adds a small web/admin study surface in `saki-phone/web` without redesigning the main chat product. It stays backend-driven and reuses the existing B1/B2/B3/B4 APIs.
+
+The study page now supports:
+- viewing the current active session, mode, runtime state, elapsed/remaining minutes, and recent check-ins
+- starting a session with title / goal / mode / planned minutes
+- pause / resume / complete / abandon controls against the existing lifecycle endpoints
+- lightweight wellbeing check-in submission (`start | end` with optional energy / stress / focus / body / note fields)
+- viewing recent learning-session events and recent generated companion responses
+- viewing B4 progress summaries and friction notes with simple `7d / 14d / 30d` window switches
+
+Implementation notes:
+- the UI is intentionally readable and inspectable, not a polished timer app
+- invalid control transitions still defer to backend validation and are surfaced as readable request errors
+- progress cards reuse `/api/learning-sessions/progress` instead of calculating trend data in the frontend
+- recovery/support context stays tied to the existing B3 response/debug payloads
+
+Still intentionally missing after B5:
+- animated timer UX
+- rich charts / analytics dashboard
+- deep session editing flows
+- major chat UI redesign
+- automatic long-term memory writes from UI activity
 
 ### Check-in behavior
 - `stage` supports `start | end`.

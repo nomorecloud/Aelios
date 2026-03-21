@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from saki_gateway.runtime_store import RuntimeStore
 from saki_gateway.server import GatewayApp
 from saki_gateway.study_companion import StudyCompanionResponder
+from saki_gateway.study_progress import StudyProgressSummarizer
 
 
 class LearningSessionTests(unittest.TestCase):
@@ -25,6 +26,7 @@ class LearningSessionTests(unittest.TestCase):
         app._events = []
         app._record_event = lambda event_type, payload, **kwargs: app._events.append((event_type, payload))
         app.study_responder = StudyCompanionResponder()
+        app.study_progress = StudyProgressSummarizer()
         return app
 
     def _start(self, app: GatewayApp, **overrides):
@@ -403,6 +405,162 @@ class LearningSessionTests(unittest.TestCase):
         self.assertEqual(framework["layered_persona"]["base_persona_slot"], "neutral_companion")
         self.assertEqual(framework["mode_overlay"], "study_review")
         self.assertIn("Future persona injection", framework["todo"])
+
+
+
+
+class LearningProgressSummaryTests(unittest.TestCase):
+    def _make_runtime_store(self) -> RuntimeStore:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        base = Path(temp_dir.name)
+        return RuntimeStore(base / "gateway.db", base / "events.jsonl")
+
+    def _make_app(self) -> GatewayApp:
+        app = GatewayApp.__new__(GatewayApp)
+        app.runtime_store = self._make_runtime_store()
+        app.memory_store = SimpleNamespace(upsert_memory=lambda **kwargs: None)
+        app._refresh_active_memory = lambda: None
+        app._events = []
+        app._record_event = lambda event_type, payload, **kwargs: app._events.append((event_type, payload))
+        app.study_responder = StudyCompanionResponder()
+        app.study_progress = StudyProgressSummarizer()
+        return app
+
+    def _create_sample_history(self, app: GatewayApp) -> None:
+        first = app.create_learning_session_payload(
+            {
+                "title": "数学冲刺",
+                "goal": "做题",
+                "planned_minutes": 25,
+                "started_at": "2026-03-18T09:00:00",
+                "start_checkin": {"stage": "start", "energy_level": 2, "stress_level": 4, "note": "有点累"},
+            }
+        )["item"]
+        app.update_learning_session_runtime_payload(first["id"], {"action": "pause", "elapsed_minutes": 8, "remaining_minutes": 17})
+        app.update_learning_session_runtime_payload(first["id"], {"action": "paused_too_long"})
+        app.abandon_learning_session_payload(
+            first["id"],
+            {"ended_at": "2026-03-18T09:08:00", "actual_minutes": 8, "summary": "状态差", "blockers": "太累, 分心", "next_step": "午后再试"},
+        )
+
+        second = app.create_learning_session_payload(
+            {
+                "title": "英语复盘",
+                "goal": "看错题",
+                "mode": "review",
+                "planned_minutes": 20,
+                "started_at": "2026-03-19T09:00:00",
+            }
+        )["item"]
+        app.complete_learning_session_payload(
+            second["id"],
+            {"ended_at": "2026-03-19T09:20:00", "actual_minutes": 20, "summary": "完成复盘", "blockers": "速度慢"},
+        )
+
+        third = app.create_learning_session_payload(
+            {
+                "title": "恢复段",
+                "goal": "缓一缓",
+                "mode": "recovery",
+                "planned_minutes": 15,
+                "started_at": "2026-03-20T09:00:00",
+                "start_checkin": {"stage": "start", "energy_level": 1, "body_state_level": 2, "note": "头痛，先缓缓"},
+            }
+        )["item"]
+        app.complete_learning_session_payload(
+            third["id"],
+            {
+                "ended_at": "2026-03-20T09:15:00",
+                "actual_minutes": 15,
+                "summary": "恢复完成",
+                "end_checkin": {"stage": "end", "energy_level": 4, "stress_level": 2, "note": "好一点"},
+            },
+        )
+
+        fourth = app.create_learning_session_payload(
+            {
+                "title": "短冲刺",
+                "goal": "再试10分钟",
+                "planned_minutes": 10,
+                "pomodoro_count": 3,
+                "started_at": "2026-03-21T08:00:00",
+                "start_checkin": {"stage": "start", "energy_level": 2, "stress_level": 5, "note": "还是累"},
+            }
+        )["item"]
+        app.update_learning_session_runtime_payload(fourth["id"], {"action": "pause", "elapsed_minutes": 6, "remaining_minutes": 4})
+        app.update_learning_session_runtime_payload(fourth["id"], {"action": "paused_too_long"})
+        app.abandon_learning_session_payload(
+            fourth["id"],
+            {"ended_at": "2026-03-21T08:06:00", "actual_minutes": 6, "summary": "没顶住", "blockers": "太累, 分心"},
+        )
+
+    def test_progress_summary_metrics_and_completion_rate(self) -> None:
+        app = self._make_app()
+        self._create_sample_history(app)
+        payload = app.get_learning_progress_payload(window_days=7, session_limit=20)
+        self.assertEqual(payload["metrics"]["sessions_started"], 4)
+        self.assertEqual(payload["metrics"]["sessions_completed"], 2)
+        self.assertEqual(payload["metrics"]["sessions_abandoned"], 2)
+        self.assertEqual(payload["metrics"]["completion_rate"], 0.5)
+        self.assertEqual(payload["metrics"]["total_focus_minutes"], 34)
+        self.assertEqual(payload["metrics"]["average_completed_session_length_minutes"], 17.5)
+
+    def test_focus_vs_recovery_ratio_is_inspectable(self) -> None:
+        app = self._make_app()
+        self._create_sample_history(app)
+        payload = app.get_learning_progress_payload(window_days=7, session_limit=20)
+        totals = payload["focus_balance"]["totals"]
+        ratios = payload["focus_balance"]["ratios"]
+        self.assertEqual(totals["focus_minutes"], 14)
+        self.assertEqual(totals["review_minutes"], 20)
+        self.assertEqual(totals["recovery_minutes"], 15)
+        self.assertAlmostEqual(ratios["focus_ratio"], round(14 / 49, 3))
+        self.assertIn("actual_minutes", payload["focus_balance"]["approximation"])
+
+    def test_friction_pattern_detection_and_rule_traces(self) -> None:
+        app = self._make_app()
+        self._create_sample_history(app)
+        payload = app.get_learning_progress_payload(window_days=7, session_limit=20)
+        patterns = {item["pattern"]: item for item in payload["friction_patterns"]["patterns"]}
+        self.assertIn("frequent_long_pauses", patterns)
+        self.assertIn("repeated_abandoned_sessions", patterns)
+        self.assertIn("repeated_low_energy_starts", patterns)
+        self.assertIn("many_short_incomplete_attempts", patterns)
+        self.assertIn("rule", patterns["frequent_long_pauses"]["rule_trace"])
+
+    def test_low_energy_and_recovery_needed_counts_aggregate(self) -> None:
+        app = self._make_app()
+        self._create_sample_history(app)
+        payload = app.get_learning_progress_payload(window_days=7, session_limit=20)
+        self.assertGreaterEqual(payload["metrics"]["low_energy_start_count"], 3)
+        self.assertGreaterEqual(payload["metrics"]["recovery_needed_signal_count"], 2)
+
+    def test_summary_text_generation_reflects_metrics(self) -> None:
+        app = self._make_app()
+        self._create_sample_history(app)
+        payload = app.get_learning_progress_payload(window_days=7, session_limit=20)
+        self.assertIn("4 study sessions", payload["summary_text"]["weekly_summary"])
+        self.assertTrue(payload["summary_text"]["recent_pattern_summary"])
+        self.assertIn("Momentum", payload["summary_text"]["momentum_check"])
+        self.assertIn("focus / 20 review / 15 recovery", payload["summary_text"]["blocker_focus_balance_note"])
+
+    def test_progress_listing_returns_multiple_windows_and_inspection_metadata(self) -> None:
+        app = self._make_app()
+        self._create_sample_history(app)
+        payload = app.list_learning_progress_payload(windows=[7, 14], session_limit=20)
+        self.assertEqual(payload["available_windows"], [7, 14])
+        self.assertEqual(len(payload["items"]), 2)
+        self.assertIn("inspection", payload["items"][0])
+        self.assertGreaterEqual(len(payload["recent_sessions"]), 4)
+
+    def test_progress_payload_handles_no_data(self) -> None:
+        app = self._make_app()
+        payload = app.get_learning_progress_payload(window_days=7, session_limit=20)
+        self.assertEqual(payload["metrics"]["sessions_started"], 0)
+        self.assertEqual(payload["friction_patterns"]["pattern_count"], 0)
+        self.assertIn("No study sessions", payload["summary_text"]["weekly_summary"])
+        self.assertFalse(payload["memory_digest_hook"]["available"])
 
 
 if __name__ == "__main__":

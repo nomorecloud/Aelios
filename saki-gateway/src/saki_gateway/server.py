@@ -27,6 +27,7 @@ from .runtime_store import RuntimeStore
 from .trilium import TriliumClient
 from .scheduler import GatewayScheduler
 from .study_companion import DEFAULT_STUDY_RESPONSE_STYLE, StudyCompanionResponder
+from .study_progress import DEFAULT_PROGRESS_WINDOWS, StudyProgressSummarizer, make_window
 from .tools import (
     build_default_registry,
     prepare_image_context,
@@ -97,6 +98,7 @@ class GatewayApp:
             self._event_log_path,
         )
         self.study_responder = StudyCompanionResponder()
+        self.study_progress = StudyProgressSummarizer()
         self.trilium_client = TriliumClient(self.config_store.config.trilium)
         self.tools = build_default_registry(
             root,
@@ -1492,6 +1494,8 @@ class GatewayApp:
     def _effective_learning_response_style(self, session_id: str = "") -> Dict[str, Any]:
         if not hasattr(self, "study_responder"):
             self.study_responder = StudyCompanionResponder()
+        if not hasattr(self, "study_progress"):
+            self.study_progress = StudyProgressSummarizer()
         scoped = self.runtime_store.get_learning_response_style(scope="session", scope_id=session_id) if session_id else None
         default_style = self.runtime_store.get_learning_response_style(scope="default", scope_id="")
         payload: Dict[str, Any] = {}
@@ -1699,6 +1703,72 @@ class GatewayApp:
         return {
             "session_id": session_id,
             "framework": framework,
+        }
+
+    def _group_items_by_session(self, items: Iterable[Dict[str, Any]]) -> Dict[str, list[Dict[str, Any]]]:
+        grouped: Dict[str, list[Dict[str, Any]]] = {}
+        for item in items:
+            session_id = str(item.get("session_id", "") or "")
+            grouped.setdefault(session_id, []).append(item)
+        return grouped
+
+    def get_learning_progress_payload(self, *, window_days: int = 7, session_limit: int = 50) -> Dict[str, Any]:
+        window = make_window(days=max(1, window_days), session_limit=max(1, min(session_limit, 200)))
+        sessions = [
+            self._serialize_learning_session(record)
+            for record in self.runtime_store.list_learning_sessions_in_window(
+                start_at=window.start_at,
+                end_at=window.end_at,
+                limit=max(1, min(session_limit, 200)),
+            )
+        ]
+        session_ids = [item["id"] for item in sessions]
+        events = [
+            self._serialize_learning_session_event(record)
+            for record in self.runtime_store.list_learning_session_events_for_sessions(session_ids=session_ids)
+        ]
+        checkins = [
+            self._serialize_wellbeing_checkin(record)
+            for record in self.runtime_store.list_wellbeing_checkins_for_sessions(session_ids=session_ids)
+        ]
+        payload = self.study_progress.build_window_payload(
+            sessions=sessions,
+            events_by_session=self._group_items_by_session(events),
+            checkins_by_session=self._group_items_by_session(checkins),
+            window=window,
+        )
+        payload["inspection"] = {
+            "source": "computed_on_read",
+            "events_by_session_count": len(events),
+            "checkins_by_session_count": len(checkins),
+            "session_ids": session_ids,
+        }
+        return payload
+
+    def list_learning_progress_payload(self, *, windows: Optional[Iterable[int]] = None, session_limit: int = 50) -> Dict[str, Any]:
+        normalized_windows = []
+        for value in (windows or DEFAULT_PROGRESS_WINDOWS):
+            try:
+                days = max(1, int(value))
+            except (TypeError, ValueError):
+                continue
+            if days not in normalized_windows:
+                normalized_windows.append(days)
+        if not normalized_windows:
+            normalized_windows = list(DEFAULT_PROGRESS_WINDOWS)
+        items = [
+            self.get_learning_progress_payload(window_days=days, session_limit=session_limit)
+            for days in normalized_windows
+        ]
+        recent_sessions = [
+            self._serialize_learning_session(record)
+            for record in self.runtime_store.list_learning_sessions_recent(limit=max(1, min(session_limit, 50)))
+        ]
+        return {
+            "items": items,
+            "available_windows": normalized_windows,
+            "recent_sessions": recent_sessions,
+            "todo": "Future B5 UI can read these precomputed-on-demand payloads without changing the main chat flow.",
         }
 
     def update_learning_response_style_payload(self, body: Dict[str, Any], session_id: str = "") -> Dict[str, Any]:
@@ -3881,6 +3951,18 @@ class RequestHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/learning-sessions/framework":
                 session_id = parse_qs(parsed.query).get("session_id", [""])[0]
                 self._json(HTTPStatus.OK, app.get_learning_response_framework_payload(session_id=session_id))
+                return
+            if parsed.path == "/api/learning-sessions/progress":
+                query = parse_qs(parsed.query)
+                session_limit = int(query.get("session_limit", ["50"])[0] or "50")
+                windows = []
+                for raw in query.get("windows", []):
+                    windows.extend(part.strip() for part in str(raw).split(","))
+                if windows:
+                    self._json(HTTPStatus.OK, app.list_learning_progress_payload(windows=windows, session_limit=session_limit))
+                    return
+                window_days = int(query.get("window_days", ["7"])[0] or "7")
+                self._json(HTTPStatus.OK, app.get_learning_progress_payload(window_days=window_days, session_limit=session_limit))
                 return
             if parsed.path.startswith("/api/learning-sessions/"):
                 tail = parsed.path.removeprefix("/api/learning-sessions/").strip("/")

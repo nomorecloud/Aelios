@@ -144,6 +144,24 @@ PYTHONPATH=src python3 -m saki_gateway
 - QQ Bot inbound / outbound
 - Web dashboard hosted by gateway
 
+
+### Minimal study UI (B5)
+
+`saki-phone/web` now includes a small study surface layered on top of the existing B1/B2/B3/B4 backend APIs. It is intentionally admin/debug-friendly rather than a separate polished product UI.
+
+Current study UI scope:
+- view the current active learning session, mode, runtime state, elapsed/remaining minutes, and simple lifecycle controls
+- start / pause / resume / complete / abandon sessions through the existing gateway endpoints
+- submit lightweight study-support check-ins (energy / stress / focus / body discomfort / note) to the existing wellbeing model
+- inspect recent session events and generated companion responses
+- inspect B4 progress summaries through simple 7d / 14d / 30d switches
+
+Intentional limitations:
+- no timer animation system
+- no full analytics dashboard
+- no major redesign of the main chat flow
+- UI remains backend-aligned and minimal while the study system stabilizes
+
 ## 配置文件
 
 主配置示例：
