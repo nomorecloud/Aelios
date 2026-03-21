@@ -190,7 +190,7 @@ This slice adds a backend-first learning-session flow focused on sustainable stu
   - inspectable lifecycle/runtime events emitted by the backend
 - `learning_session_responses`
   - queued proactive companion messages linked to learning events
-  - includes `response_context` for inspectable layered defaults, safety settings, and recent signal snapshots
+  - includes `response_context` for inspectable layered defaults, recovery-state selection, safety settings, next-step sizing, and recent signal snapshots
 - `learning_response_styles`
   - lightweight runtime response-style overrides (`default` or per-session scope)
 
@@ -265,9 +265,19 @@ Flow:
    - session mode
    - recent wellbeing/check-in context if available
    - recent event history to avoid repeating the same line every time
+   - recent response history so recovery adaptation can stay inspectable and avoid pressure loops
    - effective response-style config
-4. the response is stored in `learning_session_responses` with `delivery_status=queued` and an inspectable `response_context` snapshot
-   - includes selected response-variant metadata, safety flags, and style effects for debugging/admin inspection
+4. an explicit recovery interpretation pass derives a lightweight support state (`stable | low_energy | overwhelmed | anxious_or_stressed | recovery_needed`)
+   - rules stay inspectable in `response_context.recovery_state.rule_trace`
+   - current signals include wellbeing levels/notes, session mode, pause friction, abandonment, incomplete cycles, and lightweight summary hints
+5. a minimal next-step sizing pass maps the recovery state to one of:
+   - `continue_current_block`
+   - `do_one_tiny_next_action`
+   - `switch_to_lighter_review_task`
+   - `take_short_break`
+   - `stop_and_recover`
+6. the response is stored in `learning_session_responses` with `delivery_status=queued` and an inspectable `response_context` snapshot
+   - includes selected response-variant metadata, derived recovery state, safety flags, style effects, next-step category, and adapted behavior for debugging/admin inspection
 
 This is intentionally backend-first so future chat insertion, banners, or notifications can reuse the same queue.
 
@@ -284,6 +294,52 @@ Current implementation uses neutral defaults only and leaves an explicit TODO ho
 Additional notes:
 - The responder rotates through small per-event variant pools when the same event repeats in recent history, which keeps real-time nudges short without becoming mechanically repetitive.
 - Style remains inspectable as structured config (`style` + `style_effects`) rather than a hidden prompt blob.
+
+### Recovery-aware interpretation and adaptation (B3)
+The B3 layer sits on top of the existing B2 event-response path without changing the main chat flow. It remains backend-first, rule-based, and SQLite-backed.
+
+Interpretation inputs currently include:
+
+- latest wellbeing check-in levels and note text
+- session mode (`focus | recovery | review`)
+- recent pause / resume / paused-too-long events
+- repeated incomplete focus cycles
+- recent abandonment signals
+- recent queued response history
+- lightweight recovery hints already present in session `summary`, `blockers`, or `next_step`
+
+Interpretation behavior:
+
+- explicit scoring/rule composition is used instead of opaque orchestration
+- admin/debug inspection can see the chosen state, contributing reasons, and `rule_trace`
+- the current state is ephemeral runtime interpretation only; it is not written into long-term memory or `core_profile`
+
+Adaptation behavior by state:
+
+- `stable`: normal B2 behavior continues
+- `low_energy`: reduces pressure and favors a simple re-entry action
+- `overwhelmed`: stabilizes first and shrinks the task immediately
+- `anxious_or_stressed`: prefers grounding language and smaller immediate actions
+- `recovery_needed`: stops pushing output and prefers rest/recovery before more study effort
+
+### Next-step sizing
+B3 adds a deliberately small structured layer to keep proactive study replies practical without turning the system into a planner.
+
+Possible categories:
+
+- `continue_current_block`
+- `do_one_tiny_next_action`
+- `switch_to_lighter_review_task`
+- `take_short_break`
+- `stop_and_recover`
+
+The selected category is stored in `response_context.next_step` together with the main reason. This is primarily for short real-time study support and admin inspection, not for building long task plans.
+
+### Style vs recovery override rules
+- Response style config still affects phrasing, warmth, and firmness in normal conditions.
+- Recovery interpretation can soften `dominance_style=high` and `correction_style=firm` when the user appears fragile.
+- Fragile states force gentler redirects, smaller steps, anti-guilt wording, and stronger recovery-first safety behavior.
+- The recovery layer does not permit intimate, RP, punitive, or degrading language.
 
 ### Response-style config
 Safe default style:
@@ -314,6 +370,9 @@ Notes:
 - No automatic `core_profile` mutation is performed.
 
 Known limitations / TODO:
+- Recovery interpretation is intentionally heuristic and local to recent session signals; it is not a diagnostic or therapy system.
+- No trend/summaries view yet for recovery patterns across multiple sessions; that is a better fit for a future B4 slice.
+- No dedicated frontend surfacing yet for recovery state, next-step category, or adapted behavior; that is a better fit for a future B5 support UI slice.
 - No polished timer/dashboard UI in this slice.
 - Responses are queued for inspection/future delivery, not yet inserted directly into the main chat timeline.
 - No advanced wellbeing analytics or scoring.

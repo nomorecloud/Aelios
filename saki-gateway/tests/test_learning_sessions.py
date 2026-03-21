@@ -208,6 +208,7 @@ class LearningSessionTests(unittest.TestCase):
         low_energy = next(resp for resp in responses if resp["event_type"] == "low_energy_start")
         self.assertIn("最小", low_energy["message"])
         self.assertTrue(low_energy["response_context"]["wellbeing_signal"]["overwhelmed"])
+        self.assertIn(low_energy["response_context"]["recovery_state"]["state"], {"low_energy", "recovery_needed"})
         self.assertEqual(low_energy["response_context"]["style_effects"]["correction_tone"], "gentle_redirect")
 
     def test_style_config_affects_response_selection(self) -> None:
@@ -235,6 +236,93 @@ class LearningSessionTests(unittest.TestCase):
         caring_message = next(resp["message"] for resp in app.list_learning_session_responses_payload(caring["id"])["items"] if resp["event_type"] == "session_paused_too_long")
         self.assertNotEqual(firm_message, caring_message)
         self.assertTrue(any(fragment in caring_message for fragment in ["体面收尾", "目标降到更小", "直接好好收尾"]))
+
+
+    def test_anxious_state_adapts_response_behavior(self) -> None:
+        responder = StudyCompanionResponder()
+        plan = responder.build_response_plan(
+            event_type="session_resumed",
+            session={"mode": "focus", "goal": "做两道题"},
+            style=responder.normalize_style({"dominance_style": "high", "correction_style": "firm"}),
+            wellbeing={"stress_level": 5, "note": "很焦虑，心里发紧"},
+            recent_events=[{"event_type": "session_paused_too_long"}],
+        )
+        self.assertEqual(plan.debug["recovery_state"]["state"], "anxious_or_stressed")
+        self.assertEqual(plan.debug["adaptation"]["pressure_level"], "softened")
+        self.assertIn("不需要补偿式猛冲", plan.message)
+
+    def test_smaller_next_step_selection_under_strain(self) -> None:
+        responder = StudyCompanionResponder()
+        plan = responder.build_response_plan(
+            event_type="session_paused_too_long",
+            session={"mode": "review", "goal": "整理错题"},
+            style=responder.normalize_style(None),
+            wellbeing={"energy_level": 2, "stress_level": 4, "note": "有点乱"},
+            recent_events=[
+                {"event_type": "session_paused_too_long"},
+                {"event_type": "session_paused"},
+                {"event_type": "session_paused"},
+            ],
+        )
+        self.assertIn(plan.debug["next_step"]["category"], {"take_short_break", "do_one_tiny_next_action"})
+        self.assertNotEqual(plan.debug["next_step"]["category"], "continue_current_block")
+
+    def test_stable_vs_recovery_needed_tone_differs(self) -> None:
+        responder = StudyCompanionResponder()
+        style = responder.normalize_style({"dominance_style": "high", "correction_style": "firm"})
+        stable = responder.build_response_plan(
+            event_type="session_paused_too_long",
+            session={"mode": "focus", "goal": "做两道题"},
+            style=style,
+            recent_events=[],
+        )
+        fragile = responder.build_response_plan(
+            event_type="session_paused_too_long",
+            session={"mode": "focus", "goal": "做两道题", "summary": "太累了先休息"},
+            style=style,
+            wellbeing={"body_state_level": 1, "note": "头痛，想休息"},
+            recent_events=[{"event_type": "session_paused_too_long"}, {"event_type": "session_paused_too_long"}],
+        )
+        self.assertEqual(stable.debug["adaptation"]["pressure_level"], "firm")
+        self.assertEqual(fragile.debug["adaptation"]["pressure_level"], "recovery_first")
+        self.assertIn("先休息", fragile.message)
+        self.assertNotEqual(stable.message, fragile.message)
+
+    def test_recovery_logic_overrides_harsher_style_tendencies(self) -> None:
+        responder = StudyCompanionResponder()
+        plan = responder.build_response_plan(
+            event_type="session_paused_too_long",
+            session={"mode": "focus", "goal": "做两道题"},
+            style=responder.normalize_style({"dominance_style": "high", "correction_style": "firm", "praise_style": "possessive_lite"}),
+            wellbeing={"energy_level": 1, "stress_level": 5, "note": "焦虑又很累"},
+            recent_events=[{"event_type": "session_paused_too_long"}],
+        )
+        self.assertEqual(plan.debug["style_effects"]["pressure_override"], "softened_for_recovery")
+        self.assertEqual(plan.debug["style_effects"]["correction_tone"], "gentle_redirect")
+        self.assertNotIn("不要继续往后拖", plan.message)
+
+    def test_framework_inspection_includes_recovery_and_adaptation_visibility(self) -> None:
+        app = self._make_app()
+        created = self._start(app, start_checkin={"energy_level": 1, "stress_level": 4, "note": "太累了"})
+        framework = app.get_learning_response_framework_payload(created["id"])["framework"]
+        self.assertIn("recovery_state", framework)
+        self.assertIn("derived_recovery_state", framework["inspection"])
+        self.assertIn("recent_adapted_behaviors", framework["inspection"])
+        self.assertGreaterEqual(len(framework["inspection"]["recent_adapted_behaviors"]), 1)
+
+    def test_fragile_state_safety_avoids_guilt_or_intimate_language(self) -> None:
+        responder = StudyCompanionResponder()
+        plan = responder.build_response_plan(
+            event_type="session_abandoned",
+            session={"mode": "focus", "goal": "做两道题"},
+            style=responder.normalize_style({"dominance_style": "high", "praise_style": "possessive_lite"}),
+            wellbeing={"body_state_level": 1, "note": "难受，先休息"},
+            recent_events=[{"event_type": "session_paused_too_long"}, {"event_type": "session_abandoned"}],
+        )
+        lowered = plan.message.lower()
+        for fragment in ["应该", "羞", "乖乖", "惩罚"]:
+            self.assertNotIn(fragment, lowered)
+        self.assertIn("先恢复", plan.message)
 
     def test_repeated_event_responses_rotate_variants(self) -> None:
         responder = StudyCompanionResponder()
