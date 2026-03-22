@@ -1524,14 +1524,49 @@ class SakiPhoneApp {
           <input type="text" id="cfg-persona-call_user" value="${this.escAttr(persona.call_user || '')}">
         </div>
         <div class="setting-item">
-          <label>核心气质</label>
-          <textarea id="cfg-persona-core_identity" rows="3">${this.escapeHtml(persona.core_identity || '')}</textarea>
+          <label>基础人设</label>
+          <textarea id="cfg-persona-base_persona" rows="3">${this.escapeHtml(persona.base_persona || persona.core_identity || '')}</textarea>
         </div>
         <div class="setting-item">
-          <label>互动边界</label>
-          <textarea id="cfg-persona-boundaries" rows="2">${this.escapeHtml(persona.boundaries || '')}</textarea>
+          <label>学习覆盖层</label>
+          <textarea id="cfg-persona-study_overlay" rows="3">${this.escapeHtml(persona.study_overlay || '')}</textarea>
         </div>
-        <button class="btn btn-primary btn-block btn-save" onclick="app.saveSection('persona')">保存人设</button>
+        <div class="setting-item">
+          <label>恢复覆盖层</label>
+          <textarea id="cfg-persona-recovery_overlay" rows="3">${this.escapeHtml(persona.recovery_overlay || '')}</textarea>
+        </div>
+        <div class="setting-item">
+          <label>安全备注</label>
+          <textarea id="cfg-persona-safety_notes" rows="2">${this.escapeHtml(persona.safety_notes || persona.boundaries || '')}</textarea>
+        </div>
+        <div class="about-info" style="margin-bottom:12px;">
+          学习回复默认组合：基础人设 + 学习覆盖层 + 风格配置 + 安全边界。恢复态会额外启用恢复覆盖层，不会回退成单一大段 prompt。
+        </div>
+        <div class="setting-item">
+          <label>dominance_style</label>
+          <select id="cfg-persona-style-dominance_style">
+            ${['low', 'medium', 'high'].map((value) => `<option value="${value}" ${(persona.style_config || {}).dominance_style === value ? 'selected' : ''}>${value}</option>`).join('')}
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>care_style</label>
+          <select id="cfg-persona-style-care_style">
+            ${['soft', 'steady', 'strict_care'].map((value) => `<option value="${value}" ${(persona.style_config || {}).care_style === value ? 'selected' : ''}>${value}</option>`).join('')}
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>praise_style</label>
+          <select id="cfg-persona-style-praise_style">
+            ${['restrained', 'warm', 'possessive_lite'].map((value) => `<option value="${value}" ${(persona.style_config || {}).praise_style === value ? 'selected' : ''}>${value}</option>`).join('')}
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>correction_style</label>
+          <select id="cfg-persona-style-correction_style">
+            ${['gentle', 'firm'].map((value) => `<option value="${value}" ${(persona.style_config || {}).correction_style === value ? 'selected' : ''}>${value}</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn btn-primary btn-block btn-save" onclick="app.saveSection('persona')">保存分层人设</button>
       </div>
 
       <!-- Chat API -->
@@ -1806,9 +1841,19 @@ class SakiPhoneApp {
             partner_name: this.getVal('cfg-persona-partner_name'),
             partner_role: this.getVal('cfg-persona-partner_role'),
             call_user: this.getVal('cfg-persona-call_user'),
-            core_identity: this.getVal('cfg-persona-core_identity'),
-            boundaries: this.getVal('cfg-persona-boundaries'),
+            base_persona: this.getVal('cfg-persona-base_persona'),
+            study_overlay: this.getVal('cfg-persona-study_overlay'),
+            recovery_overlay: this.getVal('cfg-persona-recovery_overlay'),
+            safety_notes: this.getVal('cfg-persona-safety_notes'),
           }
+        };
+        payload.persona.core_identity = payload.persona.base_persona;
+        payload.persona.boundaries = payload.persona.safety_notes;
+        payload.learning_response_style = {
+          dominance_style: this.getVal('cfg-persona-style-dominance_style'),
+          care_style: this.getVal('cfg-persona-style-care_style'),
+          praise_style: this.getVal('cfg-persona-style-praise_style'),
+          correction_style: this.getVal('cfg-persona-style-correction_style'),
         };
         break;
 

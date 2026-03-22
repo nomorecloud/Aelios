@@ -368,16 +368,30 @@ This is intentionally backend-first so future chat insertion, banners, or notifi
 ### Layered persona-ready response architecture
 The response generator stays deliberately simple and inspectable. Each proactive message is planned from separable layers instead of one giant injected prompt:
 
-- `base_persona_slot`: safe neutral companion default in this slice
+- `base_persona_slot`: stable user-editable base persona layer
 - `context_overlay_slot`: study/recovery/review-ready insertion point
 - `event_response_style_slot`: short real-time response behavior
 - `safety_boundary_slot`: explicit study-safe boundary rules
 
-Current implementation uses neutral defaults only and leaves an explicit TODO hook for future custom persona injection.
+B6 now wires real user-provided persona content into these layers without storing one permanently flattened prompt blob. The structured config is kept in `config.json` / dashboard settings as:
+
+- `base_persona`
+- `study_overlay`
+- `recovery_overlay`
+- `safety_notes` (optional but recommended)
+- `style_config` via the existing structured style fields
+
+Composition still happens at generation time:
+
+- normal study response = base persona + study overlay + style config + safety notes
+- recovery-aware response = base persona + study overlay + recovery overlay + style config + safety notes
+
+The debug/admin payload shows which layers were configured, which were active, and whether `recovery_overlay` was actually applied.
 
 Additional notes:
 - The responder rotates through small per-event variant pools when the same event repeats in recent history, which keeps real-time nudges short without becoming mechanically repetitive.
 - Style remains inspectable as structured config (`style` + `style_effects`) rather than a hidden prompt blob.
+- The old monolithic persona text path is deprecated and mapped into `base_persona` / `safety_notes` for backward compatibility instead of competing with the layered path.
 
 ### Recovery-aware interpretation and adaptation (B3)
 The B3 layer sits on top of the existing B2 event-response path without changing the main chat flow. It remains backend-first, rule-based, and SQLite-backed.
@@ -463,5 +477,35 @@ Known limitations / TODO:
 - No per-mode override persistence yet; current style overlay is `default` or per-session only.
 - Recent-event de-duplication is intentionally lightweight and template-driven, not full dialogue planning.
 - TODO: optional custom persona text should populate the existing layer slots instead of replacing the safety/event framework.
+- TODO: add future non-study overlays separately instead of broadening the current study-only composition rules.
 - TODO: optional Trilium completion note output can be added later if needed.
 - TODO: hook the queued responses into a future web notification/chat insertion surface.
+
+## B6 layered persona settings
+
+This slice extends the existing dashboard/admin settings surface instead of introducing a new app or redesigning chat.
+
+Current persona settings UI supports:
+
+- base persona
+- study overlay
+- recovery overlay
+- optional safety notes
+- structured study style config:
+  - `dominance_style`
+  - `care_style`
+  - `praise_style`
+  - `correction_style`
+
+Important boundaries:
+
+- Study mode remains non-intimate and non-RP.
+- Persona flavor never outranks study safety rules.
+- Recovery-aware softening still overrides harsher style tendencies.
+- Missing optional layers are allowed; the composer simply skips them.
+
+Current limitations:
+
+- Persona influence on B2/B3 responses is intentionally lightweight and template-adjacent, not a full prompt orchestration engine.
+- The responder uses short persona-derived cues rather than dumping large raw persona text into every response.
+- Separate non-study overlays and richer mode systems are future work.

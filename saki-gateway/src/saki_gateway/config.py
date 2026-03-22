@@ -35,8 +35,42 @@ class PersonaConfig:
     partner_name: str = "TA"
     partner_role: str = "AI 伴侣"
     call_user: str = "你"
+    base_persona: str = "温柔、亲密、生活化，避免客服腔。"
+    study_overlay: str = "学习模式下保持短句、可执行、陪伴式提醒，不走说教或压迫路线。"
+    recovery_overlay: str = "当用户疲惫、焦虑或恢复优先时，先稳住状态、缩小动作，再考虑继续学习。"
+    safety_notes: str = "学习模式禁止露骨亲密、羞辱、惩罚、胁迫或角色扮演化表达。"
     core_identity: str = "温柔、亲密、生活化，避免客服腔。"
     boundaries: str = "不使用僵硬客服话术，不过度说教。"
+
+    def __post_init__(self) -> None:
+        self._sync_legacy_fields()
+
+    def _sync_legacy_fields(self) -> None:
+        base = str(self.base_persona or "").strip()
+        legacy_identity = str(self.core_identity or "").strip()
+        default_base = "温柔、亲密、生活化，避免客服腔。"
+        default_identity = "温柔、亲密、生活化，避免客服腔。"
+        if legacy_identity and (not base or (base == default_base and legacy_identity != default_identity)):
+            self.base_persona = legacy_identity
+            base = self.base_persona
+        if base:
+            self.core_identity = base
+
+        safety = str(self.safety_notes or "").strip()
+        legacy_boundaries = str(self.boundaries or "").strip()
+        default_safety = "学习模式禁止露骨亲密、羞辱、惩罚、胁迫或角色扮演化表达。"
+        default_boundaries = "不使用僵硬客服话术，不过度说教。"
+        if legacy_boundaries and (not safety or (safety == default_safety and legacy_boundaries != default_boundaries)):
+            self.safety_notes = legacy_boundaries
+            safety = self.safety_notes
+        if safety:
+            self.boundaries = safety
+
+    def apply_update(self, payload: Dict[str, Any]) -> None:
+        for key, value in payload.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+        self._sync_legacy_fields()
 
 
 @dataclass
@@ -328,7 +362,9 @@ def _merge_dataclass(instance: Any, payload: Dict[str, Any]) -> Any:
         if not hasattr(instance, key):
             continue
         current = getattr(instance, key)
-        if hasattr(current, "__dataclass_fields__") and isinstance(value, dict):
+        if isinstance(current, PersonaConfig) and isinstance(value, dict):
+            current.apply_update(value)
+        elif hasattr(current, "__dataclass_fields__") and isinstance(value, dict):
             _merge_dataclass(current, value)
         elif isinstance(current, list) and key == "mcp_servers":
             instance.mcp_servers = [McpServerConfig(**item) for item in value]

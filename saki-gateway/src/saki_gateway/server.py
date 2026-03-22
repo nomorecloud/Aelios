@@ -26,7 +26,11 @@ from .memory import MemoryStore
 from .runtime_store import RuntimeStore
 from .trilium import TriliumClient
 from .scheduler import GatewayScheduler
-from .study_companion import DEFAULT_STUDY_RESPONSE_STYLE, StudyCompanionResponder
+from .study_companion import (
+    DEFAULT_STUDY_RESPONSE_STYLE,
+    StudyCompanionResponder,
+    StudyPersonaLayers,
+)
 from .study_progress import DEFAULT_PROGRESS_WINDOWS, StudyProgressSummarizer, make_window
 from .tools import (
     build_default_registry,
@@ -170,6 +174,9 @@ class GatewayApp:
 
     def public_config_payload(self) -> Dict[str, Any]:
         payload = asdict(self.config_store.config)
+        persona = payload.get("persona") or {}
+        persona["style_config"] = self._effective_learning_response_style("")
+        payload["persona"] = persona
         dashboard_security = payload.get("dashboard_security") or {}
         dashboard_security["password"] = ""
         payload["dashboard_security"] = dashboard_security
@@ -286,6 +293,8 @@ class GatewayApp:
         self.scheduler.stop()
 
     def update_config(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        payload = dict(payload or {})
+        default_style = payload.pop("learning_response_style", None)
         self.scheduler.stop()
         if self.feishu_channel is not None:
             self.feishu_channel.stop()
@@ -294,6 +303,8 @@ class GatewayApp:
         if self.napcat_channel is not None:
             self.napcat_channel.stop()
         config = self.config_store.update(payload)
+        if isinstance(default_style, dict):
+            self.update_learning_response_style_payload(default_style)
         self.trilium_client = TriliumClient(self.config_store.config.trilium)
         self.tools = build_default_registry(
             self.root,
@@ -1110,11 +1121,12 @@ class GatewayApp:
         session_id: str = "",
     ) -> list[Dict[str, Any]]:
         config = self.config_store.config
+        persona = config.persona
         local_now = datetime.now().astimezone()
         system_parts = [
-            f"你是用户的 {config.persona.partner_role}，名字是 {config.persona.partner_name}。",
-            f"说话风格：{config.persona.core_identity}",
-            f"边界要求：{config.persona.boundaries}",
+            f"你是用户的 {persona.partner_role}，名字是 {persona.partner_name}。",
+            f"基础人设：{persona.base_persona}",
+            f"安全与边界：{persona.safety_notes}",
             f"（参考信息）当前服务器本地时间：{local_now.isoformat(timespec='seconds')}。请以这个本地时间判断现在是白天、夜晚、工作日还是周末。",
             "如果用户提到绝对时间但没有注明时区或 UTC 偏移，请按服务器本地时间理解。",
             "你是唯一直接对用户说话的模型。工具层、搜索层、识图层都只能给你补充上下文，不能替你发言。",
@@ -1519,6 +1531,38 @@ class GatewayApp:
             )
         return self.study_responder.normalize_style(payload).__dict__
 
+    def _effective_persona_config(self) -> Dict[str, Any]:
+        if hasattr(self, "config_store") and getattr(self.config_store, "config", None) is not None:
+            persona = self.config_store.config.persona
+        else:
+            from .config import PersonaConfig
+
+            persona = PersonaConfig()
+        return {
+            "partner_name": persona.partner_name,
+            "partner_role": persona.partner_role,
+            "call_user": persona.call_user,
+            "base_persona": persona.base_persona,
+            "study_overlay": persona.study_overlay,
+            "recovery_overlay": persona.recovery_overlay,
+            "safety_notes": persona.safety_notes,
+            "style_config": self._effective_learning_response_style(""),
+            "legacy_fields": {
+                "core_identity": persona.core_identity,
+                "boundaries": persona.boundaries,
+            },
+        }
+
+    def _build_study_persona_layers(self, session_id: str = "") -> StudyPersonaLayers:
+        persona = self._effective_persona_config()
+        return StudyPersonaLayers(
+            base_persona=str(persona.get("base_persona", "") or ""),
+            study_overlay=str(persona.get("study_overlay", "") or ""),
+            recovery_overlay=str(persona.get("recovery_overlay", "") or ""),
+            safety_notes=str(persona.get("safety_notes", "") or ""),
+            style_config=self._effective_learning_response_style(session_id),
+        )
+
     def _queue_learning_session_response(self, event_record: Any) -> Optional[Dict[str, Any]]:
         session = self.runtime_store.get_learning_session(event_record.session_id)
         wellbeing_items = self.list_wellbeing_checkins_payload(session.session_id, limit=3)["items"]
@@ -1531,6 +1575,7 @@ class GatewayApp:
             wellbeing=wellbeing,
             recent_events=[self._serialize_learning_session_event(item) for item in self.runtime_store.list_learning_session_events(session_id=session.session_id, limit=5)],
             recent_responses=[self._serialize_learning_session_response(item) for item in self.runtime_store.list_learning_session_responses(session_id=session.session_id, limit=5)],
+            persona_layers=self._build_study_persona_layers(session.session_id),
         )
         response = self.runtime_store.add_learning_session_response(
             session_id=session.session_id,
@@ -1683,12 +1728,16 @@ class GatewayApp:
             wellbeing=wellbeing,
             recent_events=recent_events,
             recent_responses=recent_responses,
+            persona_layers=self._build_study_persona_layers(session_id),
         )
         if session_id:
             framework["inspection"] = {
                 "recent_events": recent_events,
                 "recent_responses": recent_responses,
                 "effective_style": asdict(style),
+                "persona_layers": self._effective_persona_config(),
+                "active_persona_layers": (framework.get("persona_composition") or {}).get("active_layers", []),
+                "recovery_overlay_applied": (framework.get("persona_composition") or {}).get("recovery_overlay_applied", False),
                 "derived_recovery_state": framework.get("recovery_state", {}),
                 "recent_adapted_behaviors": [
                     {
@@ -2816,11 +2865,13 @@ class GatewayApp:
         about_her = [
             f"伴侣名字: {persona.partner_name}",
             f"伴侣身份: {persona.partner_role}",
-            f"核心气质: {persona.core_identity}",
+            f"基础人设: {persona.base_persona}",
         ]
         relationship_core = [
             f"对用户称呼: {persona.call_user}",
-            f"互动边界: {persona.boundaries}",
+            f"学习层: {persona.study_overlay}",
+            f"恢复层: {persona.recovery_overlay}",
+            f"安全边界: {persona.safety_notes}",
         ]
         important_categories = {"preference", "promise", "anniversary"}
         important_memories = [
