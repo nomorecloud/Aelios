@@ -145,39 +145,38 @@ PYTHONPATH=src python3 -m saki_gateway
 - Web dashboard hosted by gateway
 
 
-### Study workspace refinement (B5 + next workspace slice)
+### Study workspace refinement (B5 + workspace layout slice)
 
-`saki-phone/web` now includes a workspace-style study surface layered on top of the existing B1/B2/B3/B4/B5/B6 backend APIs. It still keeps chat as the main continuous interaction flow, but the study page now feels more like a lightweight workbench than a settings form.
+`saki-phone/web` now uses a calmer workspace-style study surface layered on top of the existing B1/B2/B3/B4/B5/B6 backend APIs. The goal of this slice is frontend redistribution and hierarchy cleanup: chat still remains the main continuous interaction flow, but the study page now reads more like a lightweight Claude-inspired workbench and less like a stack of admin forms.
 
-Current workspace scope:
-- a Claude-like lightweight workspace shell inside the existing dashboard navigation
-- visible quick actions for Start Focus, Resume Session, Pomodoro, Check-in, Plan Tracker, and Progress / Review
-- a clearer Current Session card with title, mode, planned minutes, elapsed/remaining state, status, lifecycle controls, and recent companion feedback
-- a lightweight persistent Plan Tracker backed by SQLite with:
-  - current study goal
-  - current task
-  - next small step
-  - blocker note
-  - carry-forward flag
-  - linked session id + updated timestamps for debug inspection
-- existing B3-compatible check-ins surfaced as a first-class support tool
-- existing B4 summaries surfaced as a concise Progress Snapshot card with 7d / 14d / 30d windows
-- backend inspectability retained through explicit study-plan and learning-session payloads
+What changed in this UI refinement slice:
+- a two-column workspace shell inside the existing dashboard navigation, with the conversation/work area centered and study tools grouped into a quieter side workbench
+- a compact quick-tools strip for Start Focus, Resume Session, Pomodoro, Check-in, Plan Tracker, and Progress / Review
+- a higher-priority Current Session card that surfaces title, mode, planned minutes, elapsed/remaining state, lifecycle controls, and the latest companion nudge without adding a new timer system
+- an integrated Plan Tracker card that keeps current goal, current task, next small step, and blocker visible before the edit fields
+- a shorter, lighter check-in interaction that keeps the same backend model but feels more approachable on web/mobile surfaces
+- a concise Progress Snapshot card for completion rate, focus/review/recovery balance, momentum summary, and friction patterns
+- a cleaner recent study feed that separates recent responses from recent activity so user-facing support stays readable while raw-ish detail remains secondary
+
+What did not change:
+- no backend rewrite
+- no replacement of the existing B1-B6 flows
+- no chat architecture replacement
+- no heavy analytics dashboard
+- no full planner / productivity suite
 
 Intentional limitations:
 - no timer animation system
-- no full planner / PM system
 - no nested tasks, projects, or calendar planning
-- no heavy analytics dashboard
-- no major redesign of the main chat architecture
+- no desktop-only layout assumptions; the workspace collapses responsively for narrow screens
 - the Plan Tracker is intentionally a single-current-plan helper, not a productivity suite
 
-Backend support added for this slice:
-- new SQLite-backed `study_plans` runtime table
+Backend support reused by this slice:
 - `GET /api/study-plan`
 - `POST /api/study-plan`
 - `POST /api/study-plan/complete`
 - `POST /api/study-plan/clear`
+- existing learning-session, progress, response, event, and check-in endpoints
 
 Reused data from earlier slices:
 - B1 learning sessions remain the source of focus/review/recovery session state
@@ -186,6 +185,11 @@ Reused data from earlier slices:
 - B4 progress summaries remain read-only computed summaries, now shown in a cleaner snapshot card
 - B5 study UI remains the base surface, now refined into a workspace shell
 - B6 layered persona injection remains backend-side and continues to shape study companion responses
+
+Known limitations / TODO:
+- the quick tools currently scroll to the relevant workspace cards instead of opening a separate command palette
+- the feed still shows backend-derived event names directly; future polish can map more of them to friendlier labels without changing the underlying data model
+- the study page is intentionally still one page inside the dashboard, not a separate full-screen app shell
 
 ## 配置文件
 
