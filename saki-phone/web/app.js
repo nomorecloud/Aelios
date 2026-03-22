@@ -941,226 +941,317 @@ class SakiPhoneApp {
     const planLinkedLabel = plan?.linked_session_id
       ? `关联会话 ${this.escapeHtml(plan.linked_session_id)}`
       : '未绑定会话';
+    const primarySessionTitle = this.escapeHtml(active?.title || active?.subject || focusTitle || '当前学习');
+    const sessionGoal = this.escapeHtml(active?.goal || focusGoal || '从一个最小动作开始');
+    const currentTask = this.escapeHtml(plan?.current_task || '还没有当前任务');
+    const nextStep = this.escapeHtml(plan?.next_step || '写下一步后，工具会用它预填 focus');
+    const blockerNote = this.escapeHtml(plan?.blocker_note || '暂无阻碍备注');
+    const completionRate = Math.round((metrics.completion_rate || 0) * 100);
+    const focusMinutes = ((balance.totals || {}).focus_minutes) || 0;
+    const reviewMinutes = ((balance.totals || {}).review_minutes) || 0;
+    const recoveryMinutes = ((balance.totals || {}).recovery_minutes) || 0;
+    const pauseFriction = ((metrics.pause_resume || {}).friction_score) ?? 0;
+    const latestEvent = eventItems[0] || null;
 
     return `
-      ${data.error ? `<div class="study-card"><div class="study-note">学习面板加载失败：${this.escapeHtml(data.error)}</div></div>` : ''}
+      ${data.error ? `<div class="study-card study-card-subtle"><div class="study-note">学习面板加载失败：${this.escapeHtml(data.error)}</div></div>` : ''}
 
-      <div class="study-workspace">
-        <div class="study-card study-workspace-hero">
-          <div class="study-workspace-head">
-            <div>
-              <h4>${svgIcon('chat', 'icon-sm')} Study Workspace</h4>
-              <div class="study-note">保持单一连续对话流，把专注、check-in、进展和计划都放在同一工作台里。</div>
+      <div class="study-workspace study-workspace-shell">
+        <div class="study-workspace-main">
+          <div class="study-card study-workspace-hero" id="study-workspace-overview">
+            <div class="study-shell-header">
+              <div>
+                <div class="study-eyebrow">Study Workspace</div>
+                <h4>${svgIcon('chat', 'icon-sm')} 单一对话里的学习工作台</h4>
+                <div class="study-note">把当前会话、计划、check-in、进展和最近支持信息放在同一个轻量工作区里，不改动现有 B1-B6 能力。</div>
+              </div>
+              <div class="study-shell-actions">
+                <button class="btn btn-secondary btn-sm" onclick="app.showChat()">打开聊天</button>
+                <button class="btn btn-secondary btn-sm" onclick="app.refreshStudyData()">刷新工作台</button>
+              </div>
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="app.showChat()">打开聊天</button>
+
+            <div class="study-hero-grid">
+              <div class="study-hero-panel study-hero-panel-primary">
+                <div class="study-hero-kicker">Current focus</div>
+                <div class="study-hero-title">${primarySessionTitle}</div>
+                <div class="study-hero-copy">${active ? `当前以 ${this.escapeHtml(this.studyModeLabel(active.mode))} 模式进行中，目标是 ${sessionGoal}。` : `还没有 active session。可以从计划里的下一小步直接启动一个 focus。`}</div>
+                <div class="study-inline">
+                  <span class="study-pill ${active ? 'active' : ''}">${active ? this.escapeHtml(this.studyRuntimeStateLabel(active.runtime_state)) : 'ready to start'}</span>
+                  <span class="study-pill">recovery ${this.escapeHtml(recoveryState)}</span>
+                  ${plan ? `<span class="study-pill">${planLinkedLabel}</span>` : ''}
+                </div>
+              </div>
+
+              <div class="study-hero-panel">
+                <div class="study-mini-stat-list">
+                  <div class="study-mini-stat"><span>Current task</span><strong>${currentTask}</strong></div>
+                  <div class="study-mini-stat"><span>Next step</span><strong>${nextStep}</strong></div>
+                  <div class="study-mini-stat"><span>Progress window</span><strong>${this.escapeHtml(progressWindow)}</strong></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="study-workbench-strip" aria-label="Quick tools">
+              <button class="study-tool-btn primary" onclick="app.applyQuickStudyAction('focus', { title: ${JSON.stringify(focusTitle)}, goal: ${JSON.stringify(focusGoal)}, planned_minutes: 25 })">
+                <span class="study-tool-title">Start Focus</span>
+                <span class="study-tool-desc">启动 25 分钟专注轮次</span>
+              </button>
+              <button class="study-tool-btn ${canResume ? 'primary' : ''}" onclick="app.applyQuickStudyAction('resume')">
+                <span class="study-tool-title">Resume Session</span>
+                <span class="study-tool-desc">${canResume ? '继续当前暂停会话' : '没有暂停中的会话'}</span>
+              </button>
+              <button class="study-tool-btn" onclick="app.applyQuickStudyAction('pomodoro', { title: 'Pomodoro', goal: ${JSON.stringify(focusGoal)}, planned_minutes: 25, pomodoro_count: 1 })">
+                <span class="study-tool-title">Pomodoro</span>
+                <span class="study-tool-desc">复用现有 session 生命周期</span>
+              </button>
+              <button class="study-tool-btn" onclick="app.applyQuickStudyAction('checkin')">
+                <span class="study-tool-title">Check-in</span>
+                <span class="study-tool-desc">快速更新能量、压力与专注状态</span>
+              </button>
+              <button class="study-tool-btn" onclick="app.applyQuickStudyAction('plan')">
+                <span class="study-tool-title">Plan Tracker</span>
+                <span class="study-tool-desc">查看或编辑当前目标与下一步</span>
+              </button>
+              <button class="study-tool-btn" onclick="app.applyQuickStudyAction('progress')">
+                <span class="study-tool-title">Progress / Review</span>
+                <span class="study-tool-desc">切到趋势窗口并查看总结</span>
+              </button>
+            </div>
           </div>
-          <div class="study-tool-grid">
-            <button class="study-tool-btn primary" onclick="app.applyQuickStudyAction('focus', { title: ${JSON.stringify(focusTitle)}, goal: ${JSON.stringify(focusGoal)}, planned_minutes: 25 })">
-              <span class="study-tool-title">Start Focus</span>
-              <span class="study-tool-desc">预填一个 25 分钟专注轮次</span>
-            </button>
-            <button class="study-tool-btn ${canResume ? 'primary' : ''}" onclick="app.applyQuickStudyAction('resume')">
-              <span class="study-tool-title">Resume Session</span>
-              <span class="study-tool-desc">${canResume ? '继续当前暂停会话' : '当前没有可继续的暂停会话'}</span>
-            </button>
-            <button class="study-tool-btn" onclick="app.applyQuickStudyAction('pomodoro', { title: 'Pomodoro', goal: ${JSON.stringify(focusGoal)}, planned_minutes: 25, pomodoro_count: 1 })">
-              <span class="study-tool-title">Pomodoro</span>
-              <span class="study-tool-desc">复用现有 learning-session 机制，不新增计时系统</span>
-            </button>
-            <button class="study-tool-btn" onclick="app.applyQuickStudyAction('checkin')">
-              <span class="study-tool-title">Check-in</span>
-              <span class="study-tool-desc">快速填写状态，喂给现有恢复感知逻辑</span>
-            </button>
-            <button class="study-tool-btn" onclick="app.applyQuickStudyAction('plan')">
-              <span class="study-tool-title">Plan Tracker</span>
-              <span class="study-tool-desc">记录当前目标、任务和下一步</span>
-            </button>
-            <button class="study-tool-btn" onclick="app.applyQuickStudyAction('progress')">
-              <span class="study-tool-title">Progress / Review</span>
-              <span class="study-tool-desc">查看 B4 近期摘要与摩擦模式</span>
-            </button>
+
+          <div class="study-card study-session-card" id="study-current-session-card">
+            <div class="study-section-head">
+              <div>
+                <div class="study-eyebrow">Current Session</div>
+                <h4>${svgIcon('clock', 'icon-sm')} 当前高优先级工作</h4>
+              </div>
+              ${active ? `<span class="study-pill active">${this.escapeHtml(active.status || 'active')}</span>` : ''}
+            </div>
+            ${active ? `
+              <div class="study-session-overview">
+                <div>
+                  <div class="study-session-title">${this.escapeHtml(active.title || active.subject || '未命名会话')}</div>
+                  <div class="study-note">${active.goal ? `目标：${this.escapeHtml(active.goal)}` : '当前没有单独记录的 goal，会默认沿用 plan tracker 里的下一步。'} </div>
+                </div>
+                <div class="study-inline">
+                  <span class="study-pill">${this.escapeHtml(this.studyModeLabel(active.mode))}</span>
+                  <span class="study-pill">${this.escapeHtml(this.studyRuntimeStateLabel(active.runtime_state))}</span>
+                  <span class="study-pill">${active.planned_minutes || 0} min</span>
+                </div>
+              </div>
+              <div class="study-metric-band">
+                <div class="study-stat prominent"><div class="study-stat-label">已过 / 剩余</div><div class="study-stat-value">${active.elapsed_minutes || 0} / ${Math.max(0, active.remaining_minutes || 0)} 分钟</div></div>
+                <div class="study-stat"><div class="study-stat-label">模式</div><div class="study-stat-value">${this.studyModeLabel(active.mode)}</div></div>
+                <div class="study-stat"><div class="study-stat-label">计划分钟</div><div class="study-stat-value">${active.planned_minutes || 0}</div></div>
+                <div class="study-stat"><div class="study-stat-label">番茄 / 休息</div><div class="study-stat-value">${active.pomodoro_count || 0} / ${active.break_count || 0}</div></div>
+              </div>
+              ${recentResponse ? `
+                <div class="study-support-callout">
+                  <div class="study-log-title">最近陪伴回应</div>
+                  <div class="study-log-body">${this.escapeHtml(recentResponse.message || '')}</div>
+                </div>
+              ` : ''}
+              <div class="study-actions study-actions-primary">
+                ${active.runtime_state === 'paused'
+                  ? `<button class="btn btn-primary btn-sm" onclick="app.studyRuntimeAction('resume')">继续</button>`
+                  : `<button class="btn btn-secondary btn-sm" onclick="app.studyRuntimeAction('pause')">暂停</button>`}
+                <button class="btn btn-secondary btn-sm" onclick="app.applyQuickStudyAction('checkin')">Check-in</button>
+                <button class="btn btn-primary btn-sm" onclick="app.completeStudySession()">完成</button>
+                <button class="btn btn-secondary btn-sm" onclick="app.abandonStudySession()">结束</button>
+              </div>
+            ` : `
+              <div class="study-empty">当前没有进行中的学习会话。</div>
+              <div class="study-note">可以从上面的 quick tools 直接开始，也可以先在右侧写下 current task 和 next small step。</div>
+            `}
+          </div>
+
+          <div class="study-card" id="study-feed-card">
+            <div class="study-section-head">
+              <div>
+                <div class="study-eyebrow">Recent support</div>
+                <h4>${svgIcon('refresh', 'icon-sm')} Session Feed</h4>
+              </div>
+              ${inspection ? `<div class="study-note">查看 ${this.escapeHtml(inspection.title || inspection.subject || inspection.id || '')}</div>` : ''}
+            </div>
+
+            <div class="study-feed-grid">
+              <div class="study-feed-column">
+                <div class="study-feed-heading">Recent responses</div>
+                ${responseItems.length > 0 ? `<div class="study-log-list">
+                  ${responseItems.map(item => {
+                    const context = item.response_context || {};
+                    const derivedState = ((context.recovery_state || {}).state) || '';
+                    const nextStepLabel = ((context.next_step || {}).label) || '';
+                    return `<div class="study-log-item"><div class="study-log-head"><div class="study-log-title">${this.escapeHtml(item.event_type || 'response')}</div><div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div></div><div class="study-log-body">${this.escapeHtml(item.message || '')}</div>${(derivedState || nextStepLabel) ? `<div class="study-log-meta">${derivedState ? `<span>support ${this.escapeHtml(derivedState)}</span>` : ''}${nextStepLabel ? `<span>${this.escapeHtml(nextStepLabel)}</span>` : ''}</div>` : ''}</div>`;
+                  }).join('')}
+                </div>` : '<div class="study-empty">暂无陪伴回应。</div>'}
+              </div>
+              <div class="study-feed-column">
+                <div class="study-feed-heading">Recent activity</div>
+                ${eventItems.length > 0 ? `<div class="study-log-list">
+                  ${eventItems.map(item => `<div class="study-log-item"><div class="study-log-head"><div class="study-log-title">${this.escapeHtml(item.event_type || 'event')}</div><div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div></div><div class="study-log-meta"><span>${this.escapeHtml(item.runtime_state || 'state unavailable')}</span></div></div>`).join('')}
+                </div>` : '<div class="study-empty">暂无事件记录。</div>'}
+                ${latestEvent ? `<div class="study-note">最近事件：${this.escapeHtml(latestEvent.event_type || 'event')} · ${this.formatDateTime(new Date(latestEvent.created_at || ''))}</div>` : ''}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="study-workspace-grid">
-          <div class="study-workspace-main">
-            <div class="study-card" id="study-current-session-card">
-              <h4>${svgIcon('clock', 'icon-sm')} Current Session</h4>
-              ${active ? `
-                <div class="study-meta-grid">
-                  <div class="study-stat"><div class="study-stat-label">标题</div><div class="study-stat-value">${this.escapeHtml(active.title || active.subject || '未命名会话')}</div></div>
-                  <div class="study-stat"><div class="study-stat-label">模式</div><div class="study-stat-value">${this.studyModeLabel(active.mode)}</div></div>
-                  <div class="study-stat"><div class="study-stat-label">计划分钟</div><div class="study-stat-value">${active.planned_minutes || 0}</div></div>
-                  <div class="study-stat"><div class="study-stat-label">状态</div><div class="study-stat-value">${this.studyRuntimeStateLabel(active.runtime_state)} / ${this.escapeHtml(active.status || 'active')}</div></div>
-                  <div class="study-stat"><div class="study-stat-label">已过 / 剩余</div><div class="study-stat-value">${active.elapsed_minutes || 0} / ${Math.max(0, active.remaining_minutes || 0)} 分钟</div></div>
-                  <div class="study-stat"><div class="study-stat-label">番茄 / 休息</div><div class="study-stat-value">${active.pomodoro_count || 0} / ${active.break_count || 0}</div></div>
-                </div>
-                <div class="study-inline" style="margin-top:12px;">
-                  <span class="study-pill">恢复状态 ${this.escapeHtml(recoveryState)}</span>
-                  ${active.goal ? `<span class="study-pill">目标 ${this.escapeHtml(active.goal)}</span>` : ''}
-                  ${plan ? `<span class="study-pill">${planLinkedLabel}</span>` : ''}
-                </div>
-                ${recentResponse ? `
-                  <div class="study-log-item" style="margin-top:12px;">
-                    <div class="study-log-title">最近陪伴回应</div>
-                    <div class="study-log-body">${this.escapeHtml(recentResponse.message || '')}</div>
-                  </div>
-                ` : ''}
-                <div class="study-actions">
-                  ${active.runtime_state === 'paused'
-                    ? `<button class="btn btn-primary btn-sm" onclick="app.studyRuntimeAction('resume')">继续</button>`
-                    : `<button class="btn btn-secondary btn-sm" onclick="app.studyRuntimeAction('pause')">暂停</button>`}
-                  <button class="btn btn-secondary btn-sm" onclick="app.applyQuickStudyAction('checkin')">Check-in</button>
-                  <button class="btn btn-primary btn-sm" onclick="app.completeStudySession()">完成</button>
-                  <button class="btn btn-secondary btn-sm" onclick="app.abandonStudySession()">结束</button>
-                </div>
-              ` : `
-                <div class="study-empty">当前没有进行中的学习会话。</div>
-                <div class="study-note">你可以直接用上方工具按钮预填 focus / pomodoro，或者先写一个下一步计划。</div>
-              `}
-            </div>
-
-            <div class="study-card" id="study-start-card">
-              <h4>${svgIcon('plus', 'icon-sm')} Focus Launcher</h4>
-              <div class="study-form-grid">
-                <div class="setting-item full">
-                  <label>标题</label>
-                  <input type="text" id="study-title" value="${this.escapeHtml(focusTitle)}" placeholder="例如：线代复习">
-                </div>
-                <div class="setting-item full">
-                  <label>目标</label>
-                  <input type="text" id="study-goal" value="${this.escapeHtml(focusGoal)}" placeholder="例如：先做两道题">
-                </div>
-                <div class="setting-item">
-                  <label>模式</label>
-                  <select id="study-mode">
-                    <option value="focus">focus</option>
-                    <option value="review">review</option>
-                    <option value="recovery">recovery</option>
-                  </select>
-                </div>
-                <div class="setting-item">
-                  <label>计划分钟</label>
-                  <input type="number" id="study-planned-minutes" min="1" value="25">
-                </div>
+        <aside class="study-workspace-side">
+          <div class="study-card study-card-subtle" id="study-start-card">
+            <div class="study-section-head">
+              <div>
+                <div class="study-eyebrow">Focus launcher</div>
+                <h4>${svgIcon('plus', 'icon-sm')} 轻量启动器</h4>
               </div>
-              <div class="study-actions">
-                <button class="btn btn-primary btn-sm" onclick="app.startStudySession()">开始会话</button>
-              </div>
-              <div class="study-note">这是轻量入口：继续复用现有学习会话后端，而不是做一个新计时产品。</div>
             </div>
+            <div class="study-note">复用现有 learning-session 接口，只把最常用字段放到工作台里。</div>
+            <div class="study-form-grid compact" style="margin-top:12px;">
+              <div class="setting-item full">
+                <label>标题</label>
+                <input type="text" id="study-title" value="${this.escapeHtml(focusTitle)}" placeholder="例如：线代复习">
+              </div>
+              <div class="setting-item full">
+                <label>目标</label>
+                <input type="text" id="study-goal" value="${this.escapeHtml(focusGoal)}" placeholder="例如：先做两道题">
+              </div>
+              <div class="setting-item">
+                <label>模式</label>
+                <select id="study-mode">
+                  <option value="focus">focus</option>
+                  <option value="review">review</option>
+                  <option value="recovery">recovery</option>
+                </select>
+              </div>
+              <div class="setting-item">
+                <label>计划分钟</label>
+                <input type="number" id="study-planned-minutes" min="1" value="25">
+              </div>
+            </div>
+            <div class="study-actions">
+              <button class="btn btn-primary btn-sm" onclick="app.startStudySession()">开始会话</button>
+            </div>
+          </div>
 
-            <div class="study-card" id="study-progress-card">
-              <h4>${svgIcon('star', 'icon-sm')} Progress Snapshot</h4>
+          <div class="study-card" id="study-plan-card">
+            <div class="study-section-head">
+              <div>
+                <div class="study-eyebrow">Plan Tracker</div>
+                <h4>${svgIcon('star', 'icon-sm')} 当前目标与下一步</h4>
+              </div>
+              ${plan ? `<span class="study-pill">${this.escapeHtml(plan.status || 'active')}</span>` : ''}
+            </div>
+            ${plan ? `
+              <div class="study-plan-summary">
+                <div class="study-plan-line"><span>Current goal</span><strong>${this.escapeHtml(plan.current_goal || '未填写')}</strong></div>
+                <div class="study-plan-line"><span>Current task</span><strong>${currentTask}</strong></div>
+                <div class="study-plan-line"><span>Next small step</span><strong>${nextStep}</strong></div>
+                <div class="study-plan-line"><span>Blocker</span><strong>${blockerNote}</strong></div>
+              </div>
+              <div class="study-inline" style="margin-top:12px;">
+                <span class="study-pill">${plan.carry_forward ? 'carry forward' : 'clear on complete'}</span>
+                <span class="study-pill">${planLinkedLabel}</span>
+              </div>
+            ` : '<div class="study-note">还没有当前计划。写下 goal、task 和 next small step 就够了。</div>'}
+            <div class="study-form-grid compact" style="margin-top:12px;">
+              <div class="setting-item full"><label>Current goal</label><input type="text" id="study-plan-goal" value="${this.escapeHtml(plan?.current_goal || '')}" placeholder="例如：把今天的复盘推进一点"></div>
+              <div class="setting-item full"><label>Current task</label><input type="text" id="study-plan-task" value="${this.escapeHtml(plan?.current_task || '')}" placeholder="例如：整理错题第 2 题"></div>
+              <div class="setting-item full"><label>Next small step</label><input type="text" id="study-plan-next-step" value="${this.escapeHtml(plan?.next_step || '')}" placeholder="例如：先打开笔记并写下题号"></div>
+              <div class="setting-item full"><label>Blocker</label><textarea id="study-plan-blocker" rows="2" placeholder="可选：一句话记下摩擦点">${this.escapeHtml(plan?.blocker_note || '')}</textarea></div>
+              <div class="setting-item full"><label><input type="checkbox" id="study-plan-carry-forward" ${plan?.carry_forward ? 'checked' : ''}> 未完成时保留 next step</label></div>
+            </div>
+            <div class="study-actions">
+              <button class="btn btn-primary btn-sm" onclick="app.saveStudyPlan()">保存计划</button>
+              <button class="btn btn-secondary btn-sm" onclick="app.completeStudyPlanStep()">标记一步完成</button>
+              <button class="btn btn-secondary btn-sm" onclick="app.clearStudyPlan()">清空</button>
+            </div>
+            <div class="study-note">Plan Tracker 是轻量持久 guidance，不是完整任务管理系统。</div>
+          </div>
+
+          <div class="study-card" id="study-checkin-card">
+            <div class="study-section-head">
+              <div>
+                <div class="study-eyebrow">Check-in</div>
+                <h4>${svgIcon('heart', 'icon-sm')} 快速状态输入</h4>
+              </div>
+            </div>
+            <div class="study-note">给现有 B3 恢复感知逻辑一个短输入，而不是填写沉重表单。</div>
+            <div class="study-form-grid compact short-fields" style="margin-top:12px;">
+              <div class="setting-item">
+                <label>阶段</label>
+                <select id="study-checkin-stage">
+                  <option value="start">start</option>
+                  <option value="end">end</option>
+                </select>
+              </div>
+              <div class="setting-item"><label>能量</label><input type="number" id="study-checkin-energy" min="1" max="5" placeholder="1-5"></div>
+              <div class="setting-item"><label>压力</label><input type="number" id="study-checkin-stress" min="1" max="5" placeholder="1-5"></div>
+              <div class="setting-item"><label>专注困难</label><input type="number" id="study-checkin-focus" min="1" max="5" placeholder="1-5"></div>
+              <div class="setting-item"><label>身体负担</label><input type="number" id="study-checkin-body" min="1" max="5" placeholder="1-5"></div>
+              <div class="setting-item full"><label>备注</label><textarea id="study-checkin-note" rows="2" placeholder="一句话就够，例如：有点累，但可以先做 5 分钟"></textarea></div>
+            </div>
+            <div class="study-actions">
+              <button class="btn btn-primary btn-sm" onclick="app.submitStudyCheckin()">提交 check-in</button>
+            </div>
+            ${checkins.length > 0 ? `<div class="study-log-list" style="margin-top:12px;">
+              ${checkins.slice(0, 3).map(item => `<div class="study-log-item"><div class="study-log-head"><div class="study-log-title">${this.escapeHtml(item.stage || 'checkin')}</div><div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div></div><div class="study-log-meta"><span>energy ${item.energy_level ?? '-'}</span><span>stress ${item.stress_level ?? '-'}</span><span>focus ${item.focus_level ?? '-'}</span><span>body ${item.body_state_level ?? '-'}</span></div>${item.note ? `<div class="study-log-body" style="margin-top:6px;">${this.escapeHtml(item.note)}</div>` : ''}</div>`).join('')}
+            </div>` : '<div class="study-empty" style="margin-top:12px;">还没有记录 check-in。</div>'}
+          </div>
+
+          <div class="study-card" id="study-progress-card">
+            <div class="study-section-head">
+              <div>
+                <div class="study-eyebrow">Progress Snapshot</div>
+                <h4>${svgIcon('star', 'icon-sm')} 近期趋势</h4>
+              </div>
               <div class="study-inline">
                 ${[7, 14, 30].map(days => `
                   <button class="study-pill ${this.studyWindowDays === days ? 'active' : ''}" onclick="app.setStudyWindow(${days})">${days}d</button>
                 `).join('')}
               </div>
-              <div class="study-note" style="margin-top:10px;">窗口：${this.escapeHtml(progressWindow)}</div>
-              ${progress.metrics ? `
-                <div class="study-meta-grid" style="margin-top:10px;">
-                  <div class="study-stat"><div class="study-stat-label">完成率</div><div class="study-stat-value">${Math.round((metrics.completion_rate || 0) * 100)}%</div></div>
-                  <div class="study-stat"><div class="study-stat-label">开始 / 完成 / 放弃</div><div class="study-stat-value">${metrics.sessions_started || 0} / ${metrics.sessions_completed || 0} / ${metrics.sessions_abandoned || 0}</div></div>
-                  <div class="study-stat"><div class="study-stat-label">focus vs recovery</div><div class="study-stat-value">${((balance.totals || {}).focus_minutes) || 0} / ${((balance.totals || {}).recovery_minutes) || 0}</div></div>
-                  <div class="study-stat"><div class="study-stat-label">pause friction</div><div class="study-stat-value">${((metrics.pause_resume || {}).friction_score) ?? 0}</div></div>
-                </div>
-                <div class="study-balance-bar">
-                  <div class="study-balance-focus" style="width:${((balance.ratios || {}).focus_ratio || 0) * 100}%;"></div>
-                  <div class="study-balance-review" style="width:${((balance.ratios || {}).review_ratio || 0) * 100}%;"></div>
-                  <div class="study-balance-recovery" style="width:${((balance.ratios || {}).recovery_ratio || 0) * 100}%;"></div>
-                </div>
+            </div>
+            <div class="study-note">窗口：${this.escapeHtml(progressWindow)}</div>
+            ${progress.metrics ? `
+              <div class="study-metric-band compact">
+                <div class="study-stat prominent"><div class="study-stat-label">完成率</div><div class="study-stat-value">${completionRate}%</div></div>
+                <div class="study-stat"><div class="study-stat-label">开始 / 完成 / 放弃</div><div class="study-stat-value">${metrics.sessions_started || 0} / ${metrics.sessions_completed || 0} / ${metrics.sessions_abandoned || 0}</div></div>
+                <div class="study-stat"><div class="study-stat-label">focus / review / recovery</div><div class="study-stat-value">${focusMinutes} / ${reviewMinutes} / ${recoveryMinutes}</div></div>
+                <div class="study-stat"><div class="study-stat-label">pause friction</div><div class="study-stat-value">${pauseFriction}</div></div>
+              </div>
+              <div class="study-balance-bar">
+                <div class="study-balance-focus" style="width:${((balance.ratios || {}).focus_ratio || 0) * 100}%;"></div>
+                <div class="study-balance-review" style="width:${((balance.ratios || {}).review_ratio || 0) * 100}%;"></div>
+                <div class="study-balance-recovery" style="width:${((balance.ratios || {}).recovery_ratio || 0) * 100}%;"></div>
+              </div>
+              <div class="study-log-list">
+                <div class="study-log-item"><div class="study-log-title">recent summary</div><div class="study-log-body">${this.escapeHtml(texts.weekly_summary || '暂无总结')}</div></div>
+                <div class="study-log-item"><div class="study-log-title">momentum</div><div class="study-log-body">${this.escapeHtml(texts.momentum_check || '暂无数据')}</div></div>
+                <div class="study-log-item"><div class="study-log-title">blocker / friction</div><div class="study-log-body">${this.escapeHtml(texts.blocker_focus_balance_note || '暂无数据')}</div></div>
+              </div>
+              ${patterns.length > 0 ? `
                 <div class="study-log-list" style="margin-top:12px;">
-                  <div class="study-log-item"><div class="study-log-title">recent summary</div><div class="study-log-body">${this.escapeHtml(texts.weekly_summary || '暂无总结')}</div></div>
-                  <div class="study-log-item"><div class="study-log-title">momentum</div><div class="study-log-body">${this.escapeHtml(texts.momentum_check || '暂无数据')}</div></div>
-                  <div class="study-log-item"><div class="study-log-title">blocker / friction</div><div class="study-log-body">${this.escapeHtml(texts.blocker_focus_balance_note || '暂无数据')}</div></div>
+                  ${patterns.slice(0, 3).map(item => `<div class="study-log-item"><div class="study-log-title">${this.escapeHtml(item.label || item.pattern || 'pattern')}</div><div class="study-log-body">${this.escapeHtml(item.reason || '')}</div></div>`).join('')}
                 </div>
-                ${patterns.length > 0 ? `
-                  <div class="study-log-list" style="margin-top:12px;">
-                    ${patterns.slice(0, 3).map(item => `<div class="study-log-item"><div class="study-log-title">${this.escapeHtml(item.label || item.pattern || 'pattern')}</div><div class="study-log-body">${this.escapeHtml(item.reason || '')}</div></div>`).join('')}
-                  </div>
-                ` : '<div class="study-empty" style="margin-top:12px;">最近还没有明显的摩擦模式。</div>'}
-              ` : '<div class="study-empty">还没有可展示的趋势数据。</div>'}
-            </div>
-
-            <div class="study-card">
-              <h4>${svgIcon('refresh', 'icon-sm')} Session Feed</h4>
-              ${inspection ? `<div class="study-note" style="margin-bottom:10px;">当前查看：${this.escapeHtml(inspection.title || inspection.subject || inspection.id || '')}</div>` : ''}
-              <div class="study-meta-grid">
-                <div>
-                  <div class="study-note" style="margin-bottom:8px;">最近事件</div>
-                  ${eventItems.length > 0 ? `<div class="study-log-list">
-                    ${eventItems.map(item => `<div class="study-log-item"><div class="study-log-head"><div class="study-log-title">${this.escapeHtml(item.event_type || 'event')}</div><div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div></div><div class="study-log-meta"><span>${this.escapeHtml(item.runtime_state || '')}</span></div></div>`).join('')}
-                  </div>` : '<div class="study-empty">暂无事件记录。</div>'}
-                </div>
-                <div>
-                  <div class="study-note" style="margin-bottom:8px;">最近回应</div>
-                  ${responseItems.length > 0 ? `<div class="study-log-list">
-                    ${responseItems.map(item => {
-                      const context = item.response_context || {};
-                      const derivedState = ((context.recovery_state || {}).state) || '';
-                      const nextStep = ((context.next_step || {}).label) || '';
-                      return `<div class="study-log-item"><div class="study-log-head"><div class="study-log-title">${this.escapeHtml(item.event_type || 'response')}</div><div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div></div><div class="study-log-body">${this.escapeHtml(item.message || '')}</div>${(derivedState || nextStep) ? `<div class="study-log-meta">${derivedState ? `<span>support ${this.escapeHtml(derivedState)}</span>` : ''}${nextStep ? `<span>${this.escapeHtml(nextStep)}</span>` : ''}</div>` : ''}</div>`;
-                    }).join('')}
-                  </div>` : '<div class="study-empty">暂无陪伴回应。</div>'}
-                </div>
-              </div>
-            </div>
+              ` : '<div class="study-empty" style="margin-top:12px;">最近还没有明显的摩擦模式。</div>'}
+            ` : '<div class="study-empty">还没有可展示的趋势数据。</div>'}
           </div>
-
-          <div class="study-workspace-side">
-            <div class="study-card" id="study-plan-card">
-              <h4>${svgIcon('star', 'icon-sm')} Plan Tracker</h4>
-              ${plan ? `
-                <div class="study-inline">
-                  <span class="study-pill">${this.escapeHtml(plan.status || 'active')}</span>
-                  <span class="study-pill">${plan.carry_forward ? 'carry forward' : 'clear on complete'}</span>
-                  <span class="study-pill">${planLinkedLabel}</span>
-                </div>
-              ` : '<div class="study-note">还没有当前计划。写下一个目标和下一小步就够了。</div>'}
-              <div class="study-form-grid" style="margin-top:12px;">
-                <div class="setting-item full"><label>当前学习目标</label><input type="text" id="study-plan-goal" value="${this.escapeHtml(plan?.current_goal || '')}" placeholder="例如：把今天的复盘推进一点"></div>
-                <div class="setting-item full"><label>当前任务</label><input type="text" id="study-plan-task" value="${this.escapeHtml(plan?.current_task || '')}" placeholder="例如：整理错题第 2 题"></div>
-                <div class="setting-item full"><label>下一小步</label><input type="text" id="study-plan-next-step" value="${this.escapeHtml(plan?.next_step || '')}" placeholder="例如：先打开笔记并写下题号"></div>
-                <div class="setting-item full"><label>阻碍备注</label><textarea id="study-plan-blocker" rows="2" placeholder="可选：一句话记下摩擦点">${this.escapeHtml(plan?.blocker_note || '')}</textarea></div>
-                <div class="setting-item full"><label><input type="checkbox" id="study-plan-carry-forward" ${plan?.carry_forward ? 'checked' : ''}> 未完成时保留 next step</label></div>
-              </div>
-              <div class="study-actions">
-                <button class="btn btn-primary btn-sm" onclick="app.saveStudyPlan()">保存计划</button>
-                <button class="btn btn-secondary btn-sm" onclick="app.completeStudyPlanStep()">标记一步完成</button>
-                <button class="btn btn-secondary btn-sm" onclick="app.clearStudyPlan()">清空</button>
-              </div>
-              <div class="study-note">Plan Tracker 是轻量持久 guidance，不是完整任务管理系统。</div>
-            </div>
-
-            <div class="study-card" id="study-checkin-card">
-              <h4>${svgIcon('heart', 'icon-sm')} Study Check-in</h4>
-              <div class="study-form-grid">
-                <div class="setting-item">
-                  <label>阶段</label>
-                  <select id="study-checkin-stage">
-                    <option value="start">start</option>
-                    <option value="end">end</option>
-                  </select>
-                </div>
-                <div class="setting-item"><label>能量 (1-5)</label><input type="number" id="study-checkin-energy" min="1" max="5" placeholder="可留空"></div>
-                <div class="setting-item"><label>压力 (1-5)</label><input type="number" id="study-checkin-stress" min="1" max="5" placeholder="可留空"></div>
-                <div class="setting-item"><label>注意力困难 / focus (1-5)</label><input type="number" id="study-checkin-focus" min="1" max="5" placeholder="可留空"></div>
-                <div class="setting-item"><label>身体不适 (1-5)</label><input type="number" id="study-checkin-body" min="1" max="5" placeholder="可留空"></div>
-                <div class="setting-item full"><label>简短备注</label><textarea id="study-checkin-note" rows="2" placeholder="一句简短状态说明即可"></textarea></div>
-              </div>
-              <div class="study-actions">
-                <button class="btn btn-primary btn-sm" onclick="app.submitStudyCheckin()">提交 check-in</button>
-              </div>
-              <div class="study-note">这是学习支持输入，不是治疗流程；它只会喂给现有 B3 恢复感知逻辑。</div>
-              ${checkins.length > 0 ? `<div class="study-log-list" style="margin-top:12px;">
-                ${checkins.slice(0, 3).map(item => `<div class="study-log-item"><div class="study-log-head"><div class="study-log-title">${this.escapeHtml(item.stage || 'checkin')}</div><div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div></div><div class="study-log-meta"><span>energy ${item.energy_level ?? '-'}</span><span>stress ${item.stress_level ?? '-'}</span><span>focus ${item.focus_level ?? '-'}</span><span>body ${item.body_state_level ?? '-'}</span></div>${item.note ? `<div class="study-log-body" style="margin-top:6px;">${this.escapeHtml(item.note)}</div>` : ''}</div>`).join('')}
-              </div>` : '<div class="study-empty" style="margin-top:12px;">还没有记录 check-in。</div>'}
-            </div>
-          </div>
-        </div>
+        </aside>
       </div>
     `;
+  }
+
+  scrollStudySection(sectionId, focusId = '') {
+    const target = document.getElementById(sectionId);
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    if (focusId) {
+      const input = document.getElementById(focusId);
+      if (input && typeof input.focus === 'function') {
+        setTimeout(() => input.focus(), 50);
+      }
+    }
   }
 
   async startStudySession(overrides = {}) {
@@ -1310,8 +1401,19 @@ class SakiPhoneApp {
       });
       return;
     }
-    if (kind === 'progress' && this.studyWindowDays !== 14) {
-      await this.setStudyWindow(14);
+    if (kind === 'progress') {
+      if (this.studyWindowDays !== 14) {
+        await this.setStudyWindow(14);
+      }
+      this.scrollStudySection('study-progress-card');
+      return;
+    }
+    if (kind === 'plan') {
+      this.scrollStudySection('study-plan-card', 'study-plan-goal');
+      return;
+    }
+    if (kind === 'checkin') {
+      this.scrollStudySection('study-checkin-card', 'study-checkin-note');
       return;
     }
     this.showToast(`${kind} 工具已准备好`, 'success');

@@ -60,7 +60,9 @@ test('buildStudyPageMarkup renders no-active-session empty state', () => {
   assert.match(html, /Plan Tracker/);
   assert.match(html, /还没有当前计划/);
   assert.match(html, /Start Focus/);
+  assert.match(html, /Resume Session/);
   assert.match(html, /Progress Snapshot/);
+  assert.match(html, /Session Feed/);
 });
 
 test('buildStudyPageMarkup renders active session, responses, and progress summary', () => {
@@ -134,6 +136,8 @@ test('buildStudyPageMarkup renders active session, responses, and progress summa
   assert.match(html, /Frequent long pauses/);
   assert.match(html, /Plan Tracker/);
   assert.match(html, /做 2 道题/);
+  assert.match(html, /Next small step/);
+  assert.match(html, /Recent responses/);
 });
 
 test('startStudySession posts to the backend start endpoint', async () => {
@@ -261,4 +265,23 @@ test('buildSettingsSections renders layered persona fields and style config sele
   assert.match(html, /安全备注/);
   assert.match(html, /dominance_style/);
   assert.match(html, /correction_style/);
+});
+
+
+test('applyQuickStudyAction scrolls to integrated workspace tools', async () => {
+  const app = makeApp();
+  const calls = [];
+  app.scrollStudySection = (sectionId, focusId) => { calls.push({ sectionId, focusId }); };
+  app.setStudyWindow = async (days) => { app.studyWindowDays = days; calls.push({ window: days }); };
+
+  await app.applyQuickStudyAction('plan');
+  await app.applyQuickStudyAction('checkin');
+  await app.applyQuickStudyAction('progress');
+
+  assert.deepEqual(calls, [
+    { sectionId: 'study-plan-card', focusId: 'study-plan-goal' },
+    { sectionId: 'study-checkin-card', focusId: 'study-checkin-note' },
+    { window: 14 },
+    { sectionId: 'study-progress-card', focusId: undefined },
+  ]);
 });
