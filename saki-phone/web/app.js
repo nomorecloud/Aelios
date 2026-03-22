@@ -25,6 +25,8 @@ class SakiPhoneApp {
     this.currentMemoryCategory = '';
     this.expandedLogIds = new Set();
     this.editingMemoryId = null;
+    this.studyWindowDays = 7;
+    this.studyData = null;
     this.init();
   }
 
@@ -155,6 +157,7 @@ class SakiPhoneApp {
       case 'chat': this.renderChat(); this.ensureChatInput(); break;
       case 'memory': this.renderMemories(); break;
       case 'reminders': this.renderReminders(); break;
+      case 'study': this.renderStudy(); break;
       case 'settings': this.renderSettings(); break;
     }
   }
@@ -177,6 +180,7 @@ class SakiPhoneApp {
   showChat() { this.switchPage('chat'); }
   showMemory() { this.switchPage('memory'); }
   showReminders() { this.switchPage('reminders'); }
+  showStudy() { this.switchPage('study'); }
   showSettings() { this.switchPage('settings'); }
 
   // ------------------------------------------
@@ -239,6 +243,25 @@ class SakiPhoneApp {
     } catch { /* ignore */ }
     const remEl = document.getElementById('home-reminder-count');
     if (remEl) remEl.textContent = reminderCount > 0 ? `${reminderCount} 个提醒` : '无提醒';
+
+    let studyText = '查看当前学习状态';
+    try {
+      const studyRes = await this.apiFetch('/api/learning-sessions/active');
+      if (studyRes.ok) {
+        const studyData = await studyRes.json();
+        const active = studyData.item;
+        if (active) {
+          const modeText = this.studyModeLabel(active.mode);
+          studyText = `${modeText} · ${active.elapsed_minutes || 0}/${active.planned_minutes || 0} 分钟`;
+        } else {
+          studyText = '暂无进行中的学习会话';
+        }
+      }
+    } catch (_) {
+      studyText = '学习面板暂时不可用';
+    }
+    const studyEl = document.getElementById('home-study-status');
+    if (studyEl) studyEl.textContent = studyText;
 
     // Tools list
     const toolsList = document.getElementById('home-tools-list');
@@ -806,6 +829,489 @@ class SakiPhoneApp {
     } catch (err) {
       this.showToast(`清空失败: ${err.message}`, 'error');
     }
+  }
+
+  // ------------------------------------------
+  // Study Page
+  // ------------------------------------------
+  async renderStudy() {
+    const container = document.getElementById('study-content');
+    if (!container) return;
+    container.innerHTML = '<div class="empty-text">加载中...</div>';
+    await this.refreshStudyData();
+  }
+
+  async refreshStudyData() {
+    const container = document.getElementById('study-content');
+    if (!container) return;
+
+    try {
+      const activePayload = await this.getJson('/api/learning-sessions/active');
+      const sessionsPayload = await this.getJson('/api/learning-sessions?limit=6');
+      const progressPayload = await this.getJson(`/api/learning-sessions/progress?window_days=${encodeURIComponent(this.studyWindowDays)}&session_limit=20`);
+
+      const recentSessions = sessionsPayload.items || [];
+      const activeSession = activePayload.item || null;
+      const inspectionSession = activeSession || recentSessions[0] || null;
+
+      let events = [];
+      let responses = [];
+      let framework = null;
+      let checkins = [];
+      if (inspectionSession?.id) {
+        const [eventsPayload, responsesPayload, frameworkPayload, checkinsPayload] = await Promise.all([
+          this.getJson(`/api/learning-sessions/${encodeURIComponent(inspectionSession.id)}/events?limit=8`),
+          this.getJson(`/api/learning-sessions/${encodeURIComponent(inspectionSession.id)}/responses?limit=8`),
+          this.getJson(`/api/learning-sessions/framework?session_id=${encodeURIComponent(inspectionSession.id)}`),
+          this.getJson(`/api/learning-sessions/${encodeURIComponent(inspectionSession.id)}/checkins?limit=5`),
+        ]);
+        events = eventsPayload.items || [];
+        responses = responsesPayload.items || [];
+        framework = frameworkPayload.framework || null;
+        checkins = checkinsPayload.items || [];
+      }
+
+      this.studyData = {
+        activeSession,
+        inspectionSession,
+        recentSessions,
+        progress: progressPayload,
+        events,
+        responses,
+        framework,
+        checkins,
+        error: '',
+      };
+      container.innerHTML = this.buildStudyPageMarkup(this.studyData);
+    } catch (err) {
+      this.studyData = {
+        activeSession: null,
+        inspectionSession: null,
+        recentSessions: [],
+        progress: null,
+        events: [],
+        responses: [],
+        framework: null,
+        checkins: [],
+        error: err.message || '加载失败',
+      };
+      container.innerHTML = this.buildStudyPageMarkup(this.studyData);
+    }
+  }
+
+  async getJson(url, options = {}) {
+    const res = await this.apiFetch(url, options);
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (_) {
+      data = {};
+    }
+    if (!res.ok) {
+      throw new Error(data.error || data.message || `HTTP ${res.status}`);
+    }
+    return data;
+  }
+
+  buildStudyPageMarkup(data) {
+    const active = data.activeSession;
+    const inspection = data.inspectionSession;
+    const progress = data.progress || {};
+    const metrics = progress.metrics || {};
+    const balance = progress.focus_balance || { totals: {}, ratios: {} };
+    const texts = progress.summary_text || {};
+    const patterns = (progress.friction_patterns || {}).patterns || [];
+    const recoveryState = (((data.framework || {}).recovery_state || {}).state) || 'stable';
+    const responseItems = data.responses || [];
+    const eventItems = data.events || [];
+    const checkins = data.checkins || [];
+    const progressWindow = ((progress.window || {}).label) || `last ${this.studyWindowDays} days`;
+    const noSessionText = active
+      ? ''
+      : '<div class="study-note">当前没有 active 会话。你仍然可以查看最近一轮学习记录和趋势摘要。</div>';
+
+    return `
+      ${data.error ? `<div class="study-card"><div class="study-note">学习面板加载失败：${this.escapeHtml(data.error)}</div></div>` : ''}
+
+      <div class="study-card">
+        <h4>${svgIcon('clock', 'icon-sm')} 当前学习状态</h4>
+        ${active ? `
+          <div class="study-meta-grid">
+            <div class="study-stat">
+              <div class="study-stat-label">标题</div>
+              <div class="study-stat-value">${this.escapeHtml(active.title || active.subject || '未命名会话')}</div>
+            </div>
+            <div class="study-stat">
+              <div class="study-stat-label">模式</div>
+              <div class="study-stat-value">${this.studyModeLabel(active.mode)}</div>
+            </div>
+            <div class="study-stat">
+              <div class="study-stat-label">运行状态</div>
+              <div class="study-stat-value">${this.studyRuntimeStateLabel(active.runtime_state)}</div>
+            </div>
+            <div class="study-stat">
+              <div class="study-stat-label">进度</div>
+              <div class="study-stat-value">${active.elapsed_minutes || 0} / ${active.planned_minutes || 0} 分钟</div>
+            </div>
+          </div>
+          <div class="study-inline" style="margin-top:12px;">
+            <span class="study-pill">剩余 ${Math.max(0, active.remaining_minutes || 0)} 分钟</span>
+            <span class="study-pill">休息 ${active.break_count || 0} 次</span>
+            <span class="study-pill">番茄 ${active.pomodoro_count || 0}</span>
+            <span class="study-pill">恢复状态 ${this.escapeHtml(recoveryState)}</span>
+          </div>
+          <div class="study-actions">
+            ${active.runtime_state === 'paused'
+              ? `<button class="btn btn-primary btn-sm" onclick="app.studyRuntimeAction('resume')">继续</button>`
+              : `<button class="btn btn-secondary btn-sm" onclick="app.studyRuntimeAction('pause')">暂停</button>`}
+            <button class="btn btn-primary btn-sm" onclick="app.completeStudySession()">完成</button>
+            <button class="btn btn-secondary btn-sm" onclick="app.abandonStudySession()">放弃</button>
+          </div>
+        ` : `
+          <div class="study-empty">当前没有进行中的学习会话。</div>
+          ${noSessionText}
+        `}
+      </div>
+
+      <div class="study-card">
+        <h4>${svgIcon('plus', 'icon-sm')} 开始新学习</h4>
+        <div class="study-form-grid">
+          <div class="setting-item full">
+            <label>标题</label>
+            <input type="text" id="study-title" placeholder="例如：线代复习">
+          </div>
+          <div class="setting-item full">
+            <label>目标</label>
+            <input type="text" id="study-goal" placeholder="例如：先做两道题">
+          </div>
+          <div class="setting-item">
+            <label>模式</label>
+            <select id="study-mode">
+              <option value="focus">focus</option>
+              <option value="review">review</option>
+              <option value="recovery">recovery</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>计划分钟</label>
+            <input type="number" id="study-planned-minutes" min="1" value="25">
+          </div>
+        </div>
+        <div class="study-actions">
+          <button class="btn btn-primary btn-sm" onclick="app.startStudySession()">开始会话</button>
+        </div>
+        <div class="study-note">这是最小控制面板：它复用现有学习会话后端，而不是单独做一个新计时产品。</div>
+      </div>
+
+      <div class="study-card">
+        <h4>${svgIcon('heart', 'icon-sm')} 学习支持 check-in</h4>
+        <div class="study-form-grid">
+          <div class="setting-item">
+            <label>阶段</label>
+            <select id="study-checkin-stage">
+              <option value="start">start</option>
+              <option value="end">end</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>能量 (1-5)</label>
+            <input type="number" id="study-checkin-energy" min="1" max="5" placeholder="可留空">
+          </div>
+          <div class="setting-item">
+            <label>压力 (1-5)</label>
+            <input type="number" id="study-checkin-stress" min="1" max="5" placeholder="可留空">
+          </div>
+          <div class="setting-item">
+            <label>注意力困难 / focus (1-5)</label>
+            <input type="number" id="study-checkin-focus" min="1" max="5" placeholder="可留空">
+          </div>
+          <div class="setting-item">
+            <label>身体不适 (1-5)</label>
+            <input type="number" id="study-checkin-body" min="1" max="5" placeholder="可留空">
+          </div>
+          <div class="setting-item full">
+            <label>简短备注</label>
+            <textarea id="study-checkin-note" rows="2" placeholder="一句简短状态说明即可"></textarea>
+          </div>
+        </div>
+        <div class="study-actions">
+          <button class="btn btn-primary btn-sm" onclick="app.submitStudyCheckin()">提交 check-in</button>
+        </div>
+        <div class="study-note">这是学习支持输入，不是治疗流程；它只会喂给现有 B3 恢复感知逻辑。</div>
+        ${checkins.length > 0 ? `
+          <div class="study-log-list" style="margin-top:12px;">
+            ${checkins.slice(0, 3).map(item => `
+              <div class="study-log-item">
+                <div class="study-log-head">
+                  <div class="study-log-title">${this.escapeHtml(item.stage || 'checkin')}</div>
+                  <div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div>
+                </div>
+                <div class="study-log-meta">
+                  <span>energy ${item.energy_level ?? '-'}</span>
+                  <span>stress ${item.stress_level ?? '-'}</span>
+                  <span>focus ${item.focus_level ?? '-'}</span>
+                  <span>body ${item.body_state_level ?? '-'}</span>
+                </div>
+                ${item.note ? `<div class="study-log-body" style="margin-top:6px;">${this.escapeHtml(item.note)}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="study-card">
+        <h4>${svgIcon('refresh', 'icon-sm')} 最近事件与陪伴回应</h4>
+        ${inspection ? `<div class="study-note" style="margin-bottom:10px;">当前查看：${this.escapeHtml(inspection.title || inspection.subject || inspection.id || '')}</div>` : ''}
+        <div class="study-meta-grid">
+          <div>
+            <div class="study-note" style="margin-bottom:8px;">最近事件</div>
+            ${eventItems.length > 0 ? `<div class="study-log-list">
+              ${eventItems.map(item => `
+                <div class="study-log-item">
+                  <div class="study-log-head">
+                    <div class="study-log-title">${this.escapeHtml(item.event_type || 'event')}</div>
+                    <div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div>
+                  </div>
+                  <div class="study-log-meta">
+                    <span>${this.escapeHtml(item.runtime_state || '')}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>` : '<div class="study-empty">暂无事件记录。</div>'}
+          </div>
+          <div>
+            <div class="study-note" style="margin-bottom:8px;">最近回应</div>
+            ${responseItems.length > 0 ? `<div class="study-log-list">
+              ${responseItems.map(item => {
+                const context = item.response_context || {};
+                const derivedState = ((context.recovery_state || {}).state) || '';
+                const nextStep = ((context.next_step || {}).label) || '';
+                return `
+                  <div class="study-log-item">
+                    <div class="study-log-head">
+                      <div class="study-log-title">${this.escapeHtml(item.event_type || 'response')}</div>
+                      <div class="study-log-time">${this.formatDateTime(new Date(item.created_at || ''))}</div>
+                    </div>
+                    <div class="study-log-body">${this.escapeHtml(item.message || '')}</div>
+                    ${(derivedState || nextStep) ? `
+                      <div class="study-log-meta">
+                        ${derivedState ? `<span>support ${this.escapeHtml(derivedState)}</span>` : ''}
+                        ${nextStep ? `<span>${this.escapeHtml(nextStep)}</span>` : ''}
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>` : '<div class="study-empty">暂无陪伴回应。</div>'}
+          </div>
+        </div>
+      </div>
+
+      <div class="study-card">
+        <h4>${svgIcon('star', 'icon-sm')} 近期进展 / 趋势</h4>
+        <div class="study-inline">
+          ${[7, 14, 30].map(days => `
+            <button class="study-pill ${this.studyWindowDays === days ? 'active' : ''}" onclick="app.setStudyWindow(${days})">${days}d</button>
+          `).join('')}
+        </div>
+        <div class="study-note" style="margin-top:10px;">窗口：${this.escapeHtml(progressWindow)}</div>
+        ${progress.metrics ? `
+          <div class="study-meta-grid" style="margin-top:10px;">
+            <div class="study-stat">
+              <div class="study-stat-label">完成率</div>
+              <div class="study-stat-value">${Math.round((metrics.completion_rate || 0) * 100)}%</div>
+            </div>
+            <div class="study-stat">
+              <div class="study-stat-label">开始 / 完成 / 放弃</div>
+              <div class="study-stat-value">${metrics.sessions_started || 0} / ${metrics.sessions_completed || 0} / ${metrics.sessions_abandoned || 0}</div>
+            </div>
+            <div class="study-stat">
+              <div class="study-stat-label">focus 分钟</div>
+              <div class="study-stat-value">${metrics.total_focus_minutes || 0}</div>
+            </div>
+            <div class="study-stat">
+              <div class="study-stat-label">pause friction</div>
+              <div class="study-stat-value">${((metrics.pause_resume || {}).friction_score) ?? 0}</div>
+            </div>
+          </div>
+          <div class="study-balance-bar">
+            <div class="study-balance-focus" style="width:${((balance.ratios || {}).focus_ratio || 0) * 100}%;"></div>
+            <div class="study-balance-review" style="width:${((balance.ratios || {}).review_ratio || 0) * 100}%;"></div>
+            <div class="study-balance-recovery" style="width:${((balance.ratios || {}).recovery_ratio || 0) * 100}%;"></div>
+          </div>
+          <div class="study-inline">
+            <span class="study-pill">focus ${((balance.totals || {}).focus_minutes) || 0}</span>
+            <span class="study-pill">review ${((balance.totals || {}).review_minutes) || 0}</span>
+            <span class="study-pill">recovery ${((balance.totals || {}).recovery_minutes) || 0}</span>
+          </div>
+          <div class="study-log-list" style="margin-top:12px;">
+            <div class="study-log-item">
+              <div class="study-log-title">weekly summary</div>
+              <div class="study-log-body">${this.escapeHtml(texts.weekly_summary || '暂无总结')}</div>
+            </div>
+            <div class="study-log-item">
+              <div class="study-log-title">momentum</div>
+              <div class="study-log-body">${this.escapeHtml(texts.momentum_check || '暂无数据')}</div>
+            </div>
+            <div class="study-log-item">
+              <div class="study-log-title">blocker / balance</div>
+              <div class="study-log-body">${this.escapeHtml(texts.blocker_focus_balance_note || '暂无数据')}</div>
+            </div>
+          </div>
+          ${patterns.length > 0 ? `
+            <div class="study-log-list" style="margin-top:12px;">
+              ${patterns.slice(0, 4).map(item => `
+                <div class="study-log-item">
+                  <div class="study-log-title">${this.escapeHtml(item.label || item.pattern || 'pattern')}</div>
+                  <div class="study-log-body">${this.escapeHtml(item.reason || '')}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div class="study-empty" style="margin-top:12px;">最近还没有明显的摩擦模式。</div>'}
+        ` : '<div class="study-empty">还没有可展示的趋势数据。</div>'}
+      </div>
+    `;
+  }
+
+  async startStudySession() {
+    const title = this.getVal('study-title').trim();
+    const goal = this.getVal('study-goal').trim();
+    const mode = this.getVal('study-mode') || 'focus';
+    const plannedMinutes = parseInt(this.getVal('study-planned-minutes'), 10) || 25;
+    if (!title) {
+      this.showToast('请先填写学习标题', 'warning');
+      return;
+    }
+    try {
+      await this.getJson('/api/learning-sessions/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          goal,
+          mode,
+          planned_minutes: plannedMinutes,
+        }),
+      });
+      this.showToast('学习会话已开始', 'success');
+      await this.refreshStudyData();
+    } catch (err) {
+      this.showToast(`开始失败: ${err.message}`, 'error');
+    }
+  }
+
+  async studyRuntimeAction(action) {
+    const active = this.studyData?.activeSession;
+    if (!active?.id) {
+      this.showToast('当前没有 active 会话', 'warning');
+      return;
+    }
+    const elapsed = parseInt(active.elapsed_minutes || 0, 10) || 0;
+    const remaining = parseInt(active.remaining_minutes || 0, 10) || 0;
+    try {
+      await this.getJson(`/api/learning-sessions/${encodeURIComponent(active.id)}/runtime`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          elapsed_minutes: elapsed,
+          remaining_minutes: remaining,
+        }),
+      });
+      this.showToast(`已执行 ${action}`, 'success');
+      await this.refreshStudyData();
+    } catch (err) {
+      this.showToast(`操作失败: ${err.message}`, 'error');
+    }
+  }
+
+  async completeStudySession() {
+    const active = this.studyData?.activeSession;
+    if (!active?.id) {
+      this.showToast('当前没有 active 会话', 'warning');
+      return;
+    }
+    try {
+      await this.getJson(`/api/learning-sessions/${encodeURIComponent(active.id)}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      this.showToast('学习会话已完成', 'success');
+      await this.refreshStudyData();
+    } catch (err) {
+      this.showToast(`完成失败: ${err.message}`, 'error');
+    }
+  }
+
+  async abandonStudySession() {
+    const active = this.studyData?.activeSession;
+    if (!active?.id) {
+      this.showToast('当前没有 active 会话', 'warning');
+      return;
+    }
+    try {
+      await this.getJson(`/api/learning-sessions/${encodeURIComponent(active.id)}/abandon`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      this.showToast('学习会话已结束', 'success');
+      await this.refreshStudyData();
+    } catch (err) {
+      this.showToast(`结束失败: ${err.message}`, 'error');
+    }
+  }
+
+  async submitStudyCheckin() {
+    const session = this.studyData?.activeSession || this.studyData?.inspectionSession;
+    if (!session?.id) {
+      this.showToast('还没有可关联的学习会话', 'warning');
+      return;
+    }
+    const payload = {
+      stage: this.getVal('study-checkin-stage') || 'start',
+      energy_level: this.getOptionalNumber('study-checkin-energy'),
+      stress_level: this.getOptionalNumber('study-checkin-stress'),
+      focus_level: this.getOptionalNumber('study-checkin-focus'),
+      body_state_level: this.getOptionalNumber('study-checkin-body'),
+      note: this.getVal('study-checkin-note').trim(),
+    };
+    try {
+      await this.getJson(`/api/learning-sessions/${encodeURIComponent(session.id)}/checkins`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      this.showToast('check-in 已提交', 'success');
+      await this.refreshStudyData();
+    } catch (err) {
+      this.showToast(`check-in 失败: ${err.message}`, 'error');
+    }
+  }
+
+  async setStudyWindow(days) {
+    this.studyWindowDays = days;
+    await this.refreshStudyData();
+  }
+
+  studyModeLabel(mode) {
+    return {
+      focus: 'focus',
+      review: 'review',
+      recovery: 'recovery',
+    }[mode] || (mode || 'unknown');
+  }
+
+  studyRuntimeStateLabel(state) {
+    return {
+      focus: 'focus',
+      paused: 'paused',
+      break: 'break',
+      focus_completed: 'focus_completed',
+      completed: 'completed',
+      abandoned: 'abandoned',
+    }[state] || (state || 'unknown');
   }
 
   // ------------------------------------------
@@ -1619,9 +2125,26 @@ class SakiPhoneApp {
     const el = document.getElementById(id);
     return el ? el.checked : false;
   }
+
+  getOptionalNumber(id) {
+    const raw = this.getVal(id).trim();
+    if (!raw) return undefined;
+    const value = parseInt(raw, 10);
+    return Number.isFinite(value) ? value : undefined;
+  }
 }
 
 // ============================================
 // Bootstrap
 // ============================================
-window.app = new SakiPhoneApp();
+if (
+  typeof window !== 'undefined' &&
+  typeof document !== 'undefined' &&
+  !window.__SAKI_DISABLE_BOOTSTRAP__
+) {
+  window.app = new SakiPhoneApp();
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { SakiPhoneApp, svgIcon };
+}
