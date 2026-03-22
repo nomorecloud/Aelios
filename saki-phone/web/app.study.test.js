@@ -2,6 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 global.window = { __SAKI_DISABLE_BOOTSTRAP__: true };
+global.localStorage = {
+  getItem() { return null; },
+  setItem() {},
+  removeItem() {},
+};
 global.document = {
   createElement() {
     return {
@@ -174,4 +179,32 @@ test('buildStudyPageMarkup shows backend error state clearly', () => {
 
   assert.match(html, /学习面板加载失败/);
   assert.match(html, /backend offline/);
+});
+
+test('buildSettingsSections renders layered persona fields and style config selectors', () => {
+  const app = makeApp();
+  const html = app.buildSettingsSections({
+    persona: {
+      partner_name: 'Aelios',
+      partner_role: 'AI companion',
+      call_user: 'you',
+      base_persona: 'Calm and focused',
+      study_overlay: 'Keep study replies short',
+      recovery_overlay: 'Soften when user is overloaded',
+      safety_notes: 'No shaming or coercion',
+      style_config: {
+        dominance_style: 'medium',
+        care_style: 'soft',
+        praise_style: 'warm',
+        correction_style: 'gentle',
+      },
+    },
+  });
+
+  assert.match(html, /基础人设/);
+  assert.match(html, /学习覆盖层/);
+  assert.match(html, /恢复覆盖层/);
+  assert.match(html, /安全备注/);
+  assert.match(html, /dominance_style/);
+  assert.match(html, /correction_style/);
 });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 from typing import Any, Dict, Iterable, List, Optional
 
 
@@ -46,6 +47,15 @@ class LayeredPersonaSlots:
 
 
 @dataclass(frozen=True)
+class StudyPersonaLayers:
+    base_persona: str = ""
+    study_overlay: str = ""
+    recovery_overlay: str = ""
+    safety_notes: str = ""
+    style_config: Dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
 class ResponseGenerationPlan:
     message: str
     debug: Dict[str, Any]
@@ -81,10 +91,14 @@ class StudyCompanionResponder:
         wellbeing: Optional[Dict[str, Any]] = None,
         recent_events: Optional[Iterable[Dict[str, Any]]] = None,
         recent_responses: Optional[Iterable[Dict[str, Any]]] = None,
+        persona_layers: Optional[StudyPersonaLayers] = None,
     ) -> Dict[str, Any]:
         session = session or {}
         wellbeing = wellbeing or {}
         normalized_style = style or DEFAULT_STUDY_RESPONSE_STYLE
+        persona_layers = persona_layers or StudyPersonaLayers(
+            style_config=asdict(normalized_style)
+        )
         mode = str(session.get("mode", "focus") or "focus")
         recovery = self._interpret_recovery_state(
             session=session,
@@ -98,10 +112,24 @@ class StudyCompanionResponder:
             "recovery": "study_recovery",
             "review": "study_review",
         }.get(mode, "study_focus")
+        composed_persona = self.compose_persona_layers(
+            mode=mode,
+            recovery_state=recovery["state"],
+            style=normalized_style,
+            persona_layers=persona_layers,
+        )
         return {
             "layered_persona": {
                 **asdict(layer_slots),
                 "context_overlay_slot": context_overlay,
+                "configured_layers": {
+                    "base_persona": bool(persona_layers.base_persona.strip()),
+                    "study_overlay": bool(persona_layers.study_overlay.strip()),
+                    "recovery_overlay": bool(persona_layers.recovery_overlay.strip()),
+                    "safety_notes": bool(persona_layers.safety_notes.strip()),
+                },
+                "active_layers": composed_persona["active_layers"],
+                "recovery_overlay_applied": composed_persona["recovery_overlay_applied"],
             },
             "mode_overlay": context_overlay,
             "style": asdict(normalized_style),
@@ -114,6 +142,7 @@ class StudyCompanionResponder:
                 "rule_trace": recovery["rule_trace"],
             },
             "style_effects": self._style_effects(normalized_style, recovery_state=recovery["state"]),
+            "persona_composition": composed_persona,
             "safety": {
                 "explicit_language_allowed": False,
                 "degrading_language_allowed": False,
@@ -123,7 +152,7 @@ class StudyCompanionResponder:
                 "avoid_guilt_language": True,
                 "future_rule_extension": "Add mode-specific safety rules alongside this layer instead of mixing them into persona text.",
             },
-            "todo": "Future persona injection should fill the layer slots without replacing the event framework.",
+            "todo": "Future persona injection should add overlays/modes without replacing the event framework or flattening stored config.",
         }
 
     def build_response_plan(
@@ -135,7 +164,7 @@ class StudyCompanionResponder:
         wellbeing: Optional[Dict[str, Any]] = None,
         recent_events: Optional[Iterable[Dict[str, Any]]] = None,
         recent_responses: Optional[Iterable[Dict[str, Any]]] = None,
-        persona_context: str = "",
+        persona_layers: Optional[StudyPersonaLayers] = None,
     ) -> ResponseGenerationPlan:
         wellbeing = wellbeing or {}
         recent_events = list(recent_events or [])
@@ -168,8 +197,8 @@ class StudyCompanionResponder:
             wellbeing=wellbeing,
             recent_events=recent_events,
             recent_responses=recent_responses,
+            persona_layers=persona_layers,
         )
-        context["persona_context"] = str(persona_context or "").strip()
         context["recent_event_types"] = recent_event_types
         context["recent_repetition_count"] = recent_repeated
         context["recent_response_types"] = [str(item.get("event_type", "") or "") for item in recent_responses[:5]]
@@ -186,6 +215,11 @@ class StudyCompanionResponder:
             firm=firm,
             recent_repetition_count=recent_repeated,
             next_step=next_step,
+        )
+        message = self._apply_persona_flavor(
+            message,
+            persona_composition=context.get("persona_composition") or {},
+            recovery_state=recovery_state,
         )
         context["response_selection"] = selection_debug
         context["adaptation"] = {
@@ -205,7 +239,7 @@ class StudyCompanionResponder:
         wellbeing: Optional[Dict[str, Any]] = None,
         recent_events: Optional[Iterable[Dict[str, Any]]] = None,
         recent_responses: Optional[Iterable[Dict[str, Any]]] = None,
-        persona_context: str = "",
+        persona_layers: Optional[StudyPersonaLayers] = None,
     ) -> str:
         return self.build_response_plan(
             event_type=event_type,
@@ -214,8 +248,96 @@ class StudyCompanionResponder:
             wellbeing=wellbeing,
             recent_events=recent_events,
             recent_responses=recent_responses,
-            persona_context=persona_context,
+            persona_layers=persona_layers,
         ).message
+
+    def compose_persona_layers(
+        self,
+        *,
+        mode: str,
+        recovery_state: str,
+        style: StudyResponseStyle,
+        persona_layers: StudyPersonaLayers,
+    ) -> Dict[str, Any]:
+        active_layers: List[str] = []
+        resolved: List[Dict[str, str]] = []
+        for name, text in (
+            ("base_persona", persona_layers.base_persona),
+            ("study_overlay", persona_layers.study_overlay),
+        ):
+            clean = str(text or "").strip()
+            if clean:
+                active_layers.append(name)
+                resolved.append({"layer": name, "text": clean})
+        recovery_applied = recovery_state != "stable" and bool(
+            str(persona_layers.recovery_overlay or "").strip()
+        )
+        if recovery_applied:
+            active_layers.append("recovery_overlay")
+            resolved.append(
+                {
+                    "layer": "recovery_overlay",
+                    "text": str(persona_layers.recovery_overlay or "").strip(),
+                }
+            )
+        safety = str(persona_layers.safety_notes or "").strip()
+        if safety:
+            active_layers.append("safety_notes")
+            resolved.append({"layer": "safety_notes", "text": safety})
+        style_summary = (
+            f"dominance={style.dominance_style}; care={style.care_style}; "
+            f"praise={style.praise_style}; correction={style.correction_style}"
+        )
+        active_layers.append("style_config")
+        resolved.append({"layer": "style_config", "text": style_summary})
+        return {
+            "active_layers": active_layers,
+            "recovery_overlay_applied": recovery_applied,
+            "resolved_layers": resolved,
+            "summary": " | ".join(item["layer"] for item in resolved),
+            # TODO: add future non-study overlays here instead of widening response templates.
+        }
+
+    def _apply_persona_flavor(
+        self,
+        message: str,
+        *,
+        persona_composition: Dict[str, Any],
+        recovery_state: str,
+    ) -> str:
+        prefix = self._persona_prefix(
+            persona_composition=persona_composition, recovery_state=recovery_state
+        )
+        if prefix:
+            return f"{prefix}{message}"
+        return message
+
+    def _persona_prefix(
+        self, *, persona_composition: Dict[str, Any], recovery_state: str
+    ) -> str:
+        text_map = {
+            item.get("layer"): str(item.get("text", "") or "")
+            for item in persona_composition.get("resolved_layers", [])
+            if isinstance(item, dict)
+        }
+        source = " ".join(
+            [
+                text_map.get("base_persona", ""),
+                text_map.get("study_overlay", ""),
+                text_map.get("recovery_overlay", "") if recovery_state != "stable" else "",
+            ]
+        ).strip()
+        if not source:
+            return ""
+        softened = source.lower()
+        if any(term in softened for term in SAFE_BANNED_TERMS | SAFE_EXPLICIT_TERMS):
+            return ""
+        snippet = re.split(r"[。.!?\n；;]", source)[0].strip()
+        snippet = re.sub(r"\s+", " ", snippet)
+        snippet = snippet[:28].strip(" ，,;；。")
+        if not snippet:
+            return ""
+        return f"{snippet}，"
 
     def _build_message_text(
         self,
