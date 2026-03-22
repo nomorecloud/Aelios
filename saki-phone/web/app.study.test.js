@@ -35,6 +35,7 @@ function makeApp() {
   const app = Object.create(SakiPhoneApp.prototype);
   app.studyWindowDays = 7;
   app.studyData = null;
+  app.getChecked = () => false;
   app.showToast = () => {};
   return app;
 }
@@ -46,6 +47,8 @@ test('buildStudyPageMarkup renders no-active-session empty state', () => {
     inspectionSession: null,
     recentSessions: [],
     progress: { metrics: { completion_rate: 0 }, focus_balance: { totals: {}, ratios: {} }, summary_text: {} },
+    plan: null,
+    planInspection: {},
     events: [],
     responses: [],
     framework: null,
@@ -54,8 +57,10 @@ test('buildStudyPageMarkup renders no-active-session empty state', () => {
   });
 
   assert.match(html, /当前没有进行中的学习会话/);
-  assert.match(html, /暂无事件记录/);
-  assert.match(html, /暂无陪伴回应/);
+  assert.match(html, /Plan Tracker/);
+  assert.match(html, /还没有当前计划/);
+  assert.match(html, /Start Focus/);
+  assert.match(html, /Progress Snapshot/);
 });
 
 test('buildStudyPageMarkup renders active session, responses, and progress summary', () => {
@@ -74,6 +79,18 @@ test('buildStudyPageMarkup renders active session, responses, and progress summa
     },
     inspectionSession: { id: 'learn_1', title: '线代复习' },
     recentSessions: [{ id: 'learn_1', title: '线代复习' }],
+    plan: {
+      id: 'current',
+      current_goal: '把复习推进一点',
+      current_task: '做 2 道题',
+      next_step: '先把题目抄下来',
+      blocker_note: '容易分心',
+      carry_forward: true,
+      status: 'active',
+      linked_session_id: 'learn_1',
+      updated_at: '2026-03-21T07:59:00',
+    },
+    planInspection: { has_plan: true },
     progress: {
       window: { label: 'last 7 days' },
       metrics: {
@@ -110,10 +127,13 @@ test('buildStudyPageMarkup renders active session, responses, and progress summa
   });
 
   assert.match(html, /线代复习/);
-  assert.match(html, /低能量|low_energy/);
+  assert.match(html, /Current Session/);
+  assert.match(html, /low_energy/);
   assert.match(html, /先把目标缩成最小一步/);
   assert.match(html, /Momentum is mixed/);
   assert.match(html, /Frequent long pauses/);
+  assert.match(html, /Plan Tracker/);
+  assert.match(html, /做 2 道题/);
 });
 
 test('startStudySession posts to the backend start endpoint', async () => {
@@ -170,6 +190,8 @@ test('buildStudyPageMarkup shows backend error state clearly', () => {
     inspectionSession: null,
     recentSessions: [],
     progress: null,
+    plan: null,
+    planInspection: {},
     events: [],
     responses: [],
     framework: null,
@@ -179,6 +201,38 @@ test('buildStudyPageMarkup shows backend error state clearly', () => {
 
   assert.match(html, /学习面板加载失败/);
   assert.match(html, /backend offline/);
+});
+
+test('saveStudyPlan posts current lightweight plan state', async () => {
+  const app = makeApp();
+  app.studyData = {
+    activeSession: { id: 'learn_7' },
+    plan: null,
+  };
+  const values = {
+    'study-plan-goal': 'Pass chemistry quiz',
+    'study-plan-task': 'Review notes',
+    'study-plan-next-step': 'Open chapter 4',
+    'study-plan-blocker': 'Tired',
+  };
+  app.getVal = (id) => values[id] || '';
+  app.getChecked = (id) => id === 'study-plan-carry-forward';
+  let captured = null;
+  let refreshed = false;
+  app.getJson = async (url, options = {}) => {
+    captured = { url, options };
+    return { item: { id: 'current' } };
+  };
+  app.refreshStudyData = async () => { refreshed = true; };
+
+  await app.saveStudyPlan();
+
+  assert.equal(captured.url, '/api/study-plan');
+  const body = JSON.parse(captured.options.body);
+  assert.equal(body.current_goal, 'Pass chemistry quiz');
+  assert.equal(body.carry_forward, true);
+  assert.equal(body.linked_session_id, 'learn_7');
+  assert.equal(refreshed, true);
 });
 
 test('buildSettingsSections renders layered persona fields and style config selectors', () => {

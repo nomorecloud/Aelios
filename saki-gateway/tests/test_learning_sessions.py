@@ -258,6 +258,59 @@ class LearningSessionTests(unittest.TestCase):
         self.assertNotEqual(firm_message, caring_message)
         self.assertTrue(any(fragment in caring_message for fragment in ["体面收尾", "目标降到更小", "直接好好收尾"]))
 
+    def test_study_plan_persistence_and_retrieval(self) -> None:
+        app = self._make_app()
+        created = app.update_study_plan_payload(
+            {
+                "current_goal": "Finish calculus review",
+                "current_task": "Redo derivative mistakes",
+                "next_step": "Solve one warm-up problem",
+                "blocker_note": "Still mentally scattered",
+                "carry_forward": True,
+            }
+        )
+        item = created["item"]
+        self.assertEqual(item["current_goal"], "Finish calculus review")
+        self.assertEqual(item["next_step"], "Solve one warm-up problem")
+        loaded = app.get_study_plan_payload()
+        self.assertEqual(loaded["item"]["blocker_note"], "Still mentally scattered")
+        self.assertTrue(loaded["item"]["carry_forward"])
+
+    def test_study_plan_complete_and_clear(self) -> None:
+        app = self._make_app()
+        app.update_study_plan_payload(
+            {
+                "current_goal": "Linear algebra",
+                "current_task": "Chapter 3 review",
+                "next_step": "Summarize eigenvectors",
+                "carry_forward": False,
+            }
+        )
+        completed = app.complete_study_plan_payload(carry_forward=False)
+        self.assertEqual(completed["item"]["status"], "step_completed")
+        self.assertEqual(completed["item"]["next_step"], "")
+        cleared = app.clear_study_plan_payload()
+        self.assertIsNone(cleared["item"])
+
+    def test_study_plan_links_active_session_when_available(self) -> None:
+        app = self._make_app()
+        session = self._start(app)
+        payload = app.update_study_plan_payload(
+            {
+                "current_goal": "English review",
+                "current_task": "Revise vocabulary",
+                "next_step": "Read 5 flashcards aloud",
+            }
+        )
+        self.assertEqual(payload["item"]["linked_session_id"], session["id"])
+
+    def test_study_plan_no_data_handling(self) -> None:
+        app = self._make_app()
+        empty = app.get_study_plan_payload()
+        self.assertIsNone(empty["item"])
+        completed = app.complete_study_plan_payload()
+        self.assertIsNone(completed["item"])
+
 
     def test_anxious_state_adapts_response_behavior(self) -> None:
         responder = StudyCompanionResponder()

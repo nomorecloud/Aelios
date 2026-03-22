@@ -145,22 +145,47 @@ PYTHONPATH=src python3 -m saki_gateway
 - Web dashboard hosted by gateway
 
 
-### Minimal study UI (B5)
+### Study workspace refinement (B5 + next workspace slice)
 
-`saki-phone/web` now includes a small study surface layered on top of the existing B1/B2/B3/B4 backend APIs. It is intentionally admin/debug-friendly rather than a separate polished product UI.
+`saki-phone/web` now includes a workspace-style study surface layered on top of the existing B1/B2/B3/B4/B5/B6 backend APIs. It still keeps chat as the main continuous interaction flow, but the study page now feels more like a lightweight workbench than a settings form.
 
-Current study UI scope:
-- view the current active learning session, mode, runtime state, elapsed/remaining minutes, and simple lifecycle controls
-- start / pause / resume / complete / abandon sessions through the existing gateway endpoints
-- submit lightweight study-support check-ins (energy / stress / focus / body discomfort / note) to the existing wellbeing model
-- inspect recent session events and generated companion responses
-- inspect B4 progress summaries through simple 7d / 14d / 30d switches
+Current workspace scope:
+- a Claude-like lightweight workspace shell inside the existing dashboard navigation
+- visible quick actions for Start Focus, Resume Session, Pomodoro, Check-in, Plan Tracker, and Progress / Review
+- a clearer Current Session card with title, mode, planned minutes, elapsed/remaining state, status, lifecycle controls, and recent companion feedback
+- a lightweight persistent Plan Tracker backed by SQLite with:
+  - current study goal
+  - current task
+  - next small step
+  - blocker note
+  - carry-forward flag
+  - linked session id + updated timestamps for debug inspection
+- existing B3-compatible check-ins surfaced as a first-class support tool
+- existing B4 summaries surfaced as a concise Progress Snapshot card with 7d / 14d / 30d windows
+- backend inspectability retained through explicit study-plan and learning-session payloads
 
 Intentional limitations:
 - no timer animation system
-- no full analytics dashboard
-- no major redesign of the main chat flow
-- UI remains backend-aligned and minimal while the study system stabilizes
+- no full planner / PM system
+- no nested tasks, projects, or calendar planning
+- no heavy analytics dashboard
+- no major redesign of the main chat architecture
+- the Plan Tracker is intentionally a single-current-plan helper, not a productivity suite
+
+Backend support added for this slice:
+- new SQLite-backed `study_plans` runtime table
+- `GET /api/study-plan`
+- `POST /api/study-plan`
+- `POST /api/study-plan/complete`
+- `POST /api/study-plan/clear`
+
+Reused data from earlier slices:
+- B1 learning sessions remain the source of focus/review/recovery session state
+- B2 event-triggered responses remain the source of session support messages
+- B3 wellbeing check-ins and recovery-aware response logic are unchanged and only promoted in UI
+- B4 progress summaries remain read-only computed summaries, now shown in a cleaner snapshot card
+- B5 study UI remains the base surface, now refined into a workspace shell
+- B6 layered persona injection remains backend-side and continues to shape study companion responses
 
 ## 配置文件
 
