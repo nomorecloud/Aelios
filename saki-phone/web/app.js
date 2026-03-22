@@ -316,6 +316,33 @@ class SakiPhoneApp {
       const toolHtml = msg.toolContexts && msg.toolContexts.length > 0
         ? msg.toolContexts.map(tc => `<div class="tool-context-indicator">${svgIcon('tool', 'icon-sm')} ${this.escapeHtml(tc.type || 'tool')}</div>`).join('')
         : '';
+      const thinkingHtml = !isUser && msg.thinkingText
+        ? `
+          <div class="thinking-block" id="thinking-${msg.id}">
+            <div class="thinking-header" onclick="app.toggleThinking('${msg.id}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 8v4M12 16h.01"></path>
+              </svg>
+              <span>思考过程</span>
+              <span class="thinking-toggle-icon">›</span>
+            </div>
+            <div class="thinking-content" id="thinking-content-${msg.id}">
+              <pre>${this.escapeHtml(msg.thinkingText)}</pre>
+            </div>
+          </div>
+        `
+        : '';
+      const tokenHtml = !isUser && msg.tokenInfo && msg.tokenInfo.total > 0
+        ? `
+          <div class="token-badge">
+            <span class="token-in">↑ ${msg.tokenInfo.input}</span>
+            <span class="token-out">↓ ${msg.tokenInfo.output}</span>
+            <span class="token-sep">·</span>
+            <span class="token-total">${msg.tokenInfo.total} tokens</span>
+          </div>
+        `
+        : '';
 
       return `
         <div class="chat-message ${isUser ? 'user' : 'assistant'}">
@@ -326,7 +353,9 @@ class SakiPhoneApp {
               <span>${time}</span>
             </div>
             ${toolHtml}
+            ${thinkingHtml}
             <div class="message-bubble-inner">${this.renderMarkdown(msg.content)}</div>
+            ${tokenHtml}
           </div>
         </div>
       `;
@@ -372,9 +401,20 @@ class SakiPhoneApp {
       const data = await res.json();
       const content = data.content || '...';
       const toolContexts = data.tool_contexts || [];
+      const usage = data.raw?.usage || {};
+      const tokenInfo = {
+        input: usage.prompt_tokens || usage.input_tokens || 0,
+        output: usage.completion_tokens || usage.output_tokens || 0,
+        total: usage.total_tokens || 0
+      };
+      const rawContent = data.raw?.content || [];
+      const thinkingBlock = Array.isArray(rawContent)
+        ? rawContent.find(block => block.type === 'thinking')
+        : null;
+      const thinkingText = thinkingBlock?.thinking || '';
 
       this.hideTypingIndicator();
-      this.addMessage('assistant', content, { toolContexts });
+      this.addMessage('assistant', content, { toolContexts, tokenInfo, thinkingText });
       this.saveChatHistory();
       this.renderChat();
     } catch (err) {
@@ -400,6 +440,14 @@ class SakiPhoneApp {
     });
   }
 
+  toggleThinking(msgId) {
+    const content = document.getElementById(`thinking-content-${msgId}`);
+    const block = document.getElementById(`thinking-${msgId}`);
+    if (!content || !block) return;
+    const isOpen = content.classList.toggle('open');
+    block.classList.toggle('open', isOpen);
+  }
+
   showTypingIndicator() {
     this.isTyping = true;
     const container = document.getElementById('chat-messages');
@@ -418,12 +466,21 @@ class SakiPhoneApp {
     `;
     container.appendChild(div);
     this.scrollToBottom(container);
+
+    const floatingEl = document.getElementById('floating-thinking');
+    if (floatingEl) {
+      floatingEl.classList.add('visible');
+      const textEl = floatingEl.querySelector('.floating-thinking-text');
+      if (textEl) textEl.textContent = '思考中...';
+    }
   }
 
   hideTypingIndicator() {
     this.isTyping = false;
     const el = document.querySelector('.typing-indicator');
     if (el) el.remove();
+    const floatingEl = document.getElementById('floating-thinking');
+    if (floatingEl) floatingEl.classList.remove('visible');
   }
 
   ensureChatInput() {
@@ -935,7 +992,6 @@ class SakiPhoneApp {
     const checkins = data.checkins || [];
     const recentResponse = responseItems[0] || null;
     const progressWindow = ((progress.window || {}).label) || `last ${this.studyWindowDays} days`;
-    const canResume = active?.runtime_state === 'paused';
     const focusTitle = plan?.current_task || plan?.current_goal || '专注学习';
     const focusGoal = plan?.next_step || plan?.current_task || '';
     const planLinkedLabel = plan?.linked_session_id
@@ -952,6 +1008,24 @@ class SakiPhoneApp {
     const recoveryMinutes = ((balance.totals || {}).recovery_minutes) || 0;
     const pauseFriction = ((metrics.pause_resume || {}).friction_score) ?? 0;
     const latestEvent = eventItems[0] || null;
+    const plannedMinutes = Math.max(0, Number(active?.planned_minutes) || 25);
+    const elapsedMinutes = Math.max(0, Number(active?.elapsed_minutes) || 0);
+    const fallbackRemainingMinutes = Math.max(plannedMinutes - elapsedMinutes, 0);
+    const remainingMinutes = Math.max(0, Number(active?.remaining_minutes) || fallbackRemainingMinutes);
+    const progressPercent = active
+      ? Math.max(0, Math.min(100, plannedMinutes > 0 ? Math.round((elapsedMinutes / plannedMinutes) * 100) : 0))
+      : 0;
+    const remainingSeconds = Math.max(0, Math.round(remainingMinutes * 60));
+    const displayMinutes = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
+    const displaySeconds = String(remainingSeconds % 60).padStart(2, '0');
+    const pomodoroDisplay = `${displayMinutes}:${displaySeconds}`;
+    const pomodoroLabel = active
+      ? this.escapeHtml(this.studyRuntimeStateLabel(active.runtime_state || active.status || 'active'))
+      : '准备开始';
+    const pomodoroElapsed = `已专注 ${Math.max(0, Math.round(elapsedMinutes))} 分钟`;
+    const pomodoroCount = `第 ${Math.max(0, Number(active?.pomodoro_count) || 0)} 个番茄`;
+    const pomodoroRingClass = `pomodoro-ring${active ? ' active' : ''}`;
+    const pomodoroRingStyle = `--progress:${progressPercent};`;
 
     return `
       ${data.error ? `<div class="study-card study-card-subtle"><div class="study-note">学习面板加载失败：${this.escapeHtml(data.error)}</div></div>` : ''}
@@ -992,31 +1066,22 @@ class SakiPhoneApp {
               </div>
             </div>
 
-            <div class="study-workbench-strip" aria-label="Quick tools">
-              <button class="study-tool-btn primary" onclick="app.applyQuickStudyAction('focus', { title: ${JSON.stringify(focusTitle)}, goal: ${JSON.stringify(focusGoal)}, planned_minutes: 25 })">
-                <span class="study-tool-title">Start Focus</span>
-                <span class="study-tool-desc">启动 25 分钟专注轮次</span>
-              </button>
-              <button class="study-tool-btn ${canResume ? 'primary' : ''}" onclick="app.applyQuickStudyAction('resume')">
-                <span class="study-tool-title">Resume Session</span>
-                <span class="study-tool-desc">${canResume ? '继续当前暂停会话' : '没有暂停中的会话'}</span>
-              </button>
-              <button class="study-tool-btn" onclick="app.applyQuickStudyAction('pomodoro', { title: 'Pomodoro', goal: ${JSON.stringify(focusGoal)}, planned_minutes: 25, pomodoro_count: 1 })">
-                <span class="study-tool-title">Pomodoro</span>
-                <span class="study-tool-desc">复用现有 session 生命周期</span>
-              </button>
-              <button class="study-tool-btn" onclick="app.applyQuickStudyAction('checkin')">
-                <span class="study-tool-title">Check-in</span>
-                <span class="study-tool-desc">快速更新能量、压力与专注状态</span>
-              </button>
-              <button class="study-tool-btn" onclick="app.applyQuickStudyAction('plan')">
-                <span class="study-tool-title">Plan Tracker</span>
-                <span class="study-tool-desc">查看或编辑当前目标与下一步</span>
-              </button>
-              <button class="study-tool-btn" onclick="app.applyQuickStudyAction('progress')">
-                <span class="study-tool-title">Progress / Review</span>
-                <span class="study-tool-desc">切到趋势窗口并查看总结</span>
-              </button>
+            <div class="pomodoro-widget" aria-label="Pomodoro widget">
+              <div class="pomodoro-ring-wrap">
+                <div class="${pomodoroRingClass}" id="pomodoro-ring" style="${pomodoroRingStyle}">
+                  <div class="pomodoro-time" id="pomodoro-display">${pomodoroDisplay}</div>
+                  <div class="pomodoro-label" id="pomodoro-status-label">${pomodoroLabel}</div>
+                </div>
+              </div>
+              <div class="pomodoro-controls">
+                <button class="pomo-btn pomo-start" onclick="app.applyQuickStudyAction('focus', {title: '专注', planned_minutes: 25})">开始</button>
+                <button class="pomo-btn pomo-pause" onclick="app.studyRuntimeAction('pause')">暂停</button>
+                <button class="pomo-btn pomo-done" onclick="app.completeStudySession()">完成</button>
+              </div>
+              <div class="pomodoro-meta">
+                <span id="pomo-elapsed">${pomodoroElapsed}</span>
+                <span id="pomo-count">${pomodoroCount}</span>
+              </div>
             </div>
           </div>
 
@@ -1062,7 +1127,7 @@ class SakiPhoneApp {
               </div>
             ` : `
               <div class="study-empty">当前没有进行中的学习会话。</div>
-              <div class="study-note">可以从上面的 quick tools 直接开始，也可以先在右侧写下 current task 和 next small step。</div>
+              <div class="study-note">可以从上面的番茄钟直接开始，也可以先在右侧写下 current task 和 next small step。</div>
             `}
           </div>
 
@@ -1144,10 +1209,9 @@ class SakiPhoneApp {
             </div>
             ${plan ? `
               <div class="study-plan-summary">
-                <div class="study-plan-line"><span>Current goal</span><strong>${this.escapeHtml(plan.current_goal || '未填写')}</strong></div>
-                <div class="study-plan-line"><span>Current task</span><strong>${currentTask}</strong></div>
-                <div class="study-plan-line"><span>Next small step</span><strong>${nextStep}</strong></div>
-                <div class="study-plan-line"><span>Blocker</span><strong>${blockerNote}</strong></div>
+                <div class="study-plan-line"><span>当前目标</span><strong>${this.escapeHtml(plan.current_goal || '未填写')}</strong></div>
+                <div class="study-plan-line"><span>当前任务</span><strong>${currentTask}</strong></div>
+                <div class="study-plan-line"><span>下一步</span><strong>${nextStep}</strong></div>
               </div>
               <div class="study-inline" style="margin-top:12px;">
                 <span class="study-pill">${plan.carry_forward ? 'carry forward' : 'clear on complete'}</span>
@@ -1162,11 +1226,10 @@ class SakiPhoneApp {
               <div class="setting-item full"><label><input type="checkbox" id="study-plan-carry-forward" ${plan?.carry_forward ? 'checked' : ''}> 未完成时保留 next step</label></div>
             </div>
             <div class="study-actions">
-              <button class="btn btn-primary btn-sm" onclick="app.saveStudyPlan()">保存计划</button>
-              <button class="btn btn-secondary btn-sm" onclick="app.completeStudyPlanStep()">标记一步完成</button>
-              <button class="btn btn-secondary btn-sm" onclick="app.clearStudyPlan()">清空</button>
+              <button class="btn btn-primary btn-sm" onclick="app.saveStudyPlan()">保存</button>
+              <button class="btn btn-secondary btn-sm" onclick="app.completeStudyPlanStep()">标记完成</button>
             </div>
-            <div class="study-note">Plan Tracker 是轻量持久 guidance，不是完整任务管理系统。</div>
+            <div class="study-note">${blockerNote !== '暂无阻碍备注' ? `当前阻碍：${blockerNote}` : 'Plan Tracker 是轻量持久 guidance，不是完整任务管理系统。'}</div>
           </div>
 
           <div class="study-card" id="study-checkin-card">
@@ -1240,7 +1303,6 @@ class SakiPhoneApp {
       </div>
     `;
   }
-
   scrollStudySection(sectionId, focusId = '') {
     const target = document.getElementById(sectionId);
     if (target && typeof target.scrollIntoView === 'function') {
