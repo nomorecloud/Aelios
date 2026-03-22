@@ -120,6 +120,20 @@ class WellbeingCheckinRecord:
     note: str
     created_at: str
 
+
+@dataclass
+class StudyPlanRecord:
+    plan_id: str
+    current_goal: str
+    current_task: str
+    next_step: str
+    blocker_note: str
+    carry_forward: bool
+    status: str
+    linked_session_id: str
+    created_at: str
+    updated_at: str
+
 class RuntimeStore:
     def __init__(self, db_path: Path, event_log_path: Path):
         self.db_path = db_path
@@ -294,6 +308,19 @@ class RuntimeStore:
               payload TEXT NOT NULL,
               created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS study_plans (
+              id TEXT PRIMARY KEY,
+              current_goal TEXT NOT NULL DEFAULT '',
+              current_task TEXT NOT NULL DEFAULT '',
+              next_step TEXT NOT NULL DEFAULT '',
+              blocker_note TEXT NOT NULL DEFAULT '',
+              carry_forward INTEGER NOT NULL DEFAULT 0,
+              status TEXT NOT NULL DEFAULT 'active',
+              linked_session_id TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
                 """
             )
             self._ensure_column("learning_sessions", "runtime_state", "TEXT NOT NULL DEFAULT 'focus'")
@@ -304,6 +331,10 @@ class RuntimeStore:
             self._ensure_column("learning_sessions", "long_break_minutes", "INTEGER NOT NULL DEFAULT 15")
             self._ensure_column("learning_sessions", "pause_started_at", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column("learning_session_responses", "response_context", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("study_plans", "blocker_note", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("study_plans", "carry_forward", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("study_plans", "status", "TEXT NOT NULL DEFAULT 'active'")
+            self._ensure_column("study_plans", "linked_session_id", "TEXT NOT NULL DEFAULT ''")
             self.conn.commit()
 
     def _ensure_column(self, table: str, column: str, definition: str) -> None:
@@ -1085,6 +1116,89 @@ class RuntimeStore:
             self.conn.commit()
         return self.get_learning_response_style(scope=scope, scope_id=scope_id)
 
+    def get_current_study_plan(self) -> Optional[StudyPlanRecord]:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM study_plans ORDER BY updated_at DESC LIMIT 1"
+            ).fetchone()
+        return self._row_to_study_plan(row) if row is not None else None
+
+    def upsert_study_plan(
+        self,
+        *,
+        current_goal: str,
+        current_task: str,
+        next_step: str,
+        blocker_note: str = "",
+        carry_forward: bool = False,
+        status: str = "active",
+        linked_session_id: str = "",
+    ) -> StudyPlanRecord:
+        existing = self.get_current_study_plan()
+        now = utcnow_iso()
+        plan_id = existing.plan_id if existing else "current"
+        created_at = existing.created_at if existing else now
+        with self._lock:
+            self.conn.execute(
+                """
+                INSERT INTO study_plans(
+                  id, current_goal, current_task, next_step, blocker_note,
+                  carry_forward, status, linked_session_id, created_at, updated_at
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  current_goal=excluded.current_goal,
+                  current_task=excluded.current_task,
+                  next_step=excluded.next_step,
+                  blocker_note=excluded.blocker_note,
+                  carry_forward=excluded.carry_forward,
+                  status=excluded.status,
+                  linked_session_id=excluded.linked_session_id,
+                  updated_at=excluded.updated_at
+                """,
+                (
+                    plan_id,
+                    current_goal,
+                    current_task,
+                    next_step,
+                    blocker_note,
+                    1 if carry_forward else 0,
+                    status,
+                    linked_session_id,
+                    created_at,
+                    now,
+                ),
+            )
+            self.conn.commit()
+        return self.get_current_study_plan()  # type: ignore[return-value]
+
+    def clear_study_plan(self) -> None:
+        with self._lock:
+            self.conn.execute("DELETE FROM study_plans")
+            self.conn.commit()
+
+    def complete_study_plan_step(self) -> Optional[StudyPlanRecord]:
+        plan = self.get_current_study_plan()
+        if plan is None:
+            return None
+        carry_text = plan.next_step if plan.carry_forward else ""
+        return self.upsert_study_plan(
+            current_goal=plan.current_goal,
+            current_task=plan.current_task,
+            next_step="",
+            blocker_note="" if not plan.carry_forward else plan.blocker_note,
+            carry_forward=plan.carry_forward,
+            status="step_completed",
+            linked_session_id=plan.linked_session_id,
+        ) if not carry_text else self.upsert_study_plan(
+            current_goal=plan.current_goal,
+            current_task=plan.current_task,
+            next_step=carry_text,
+            blocker_note=plan.blocker_note,
+            carry_forward=plan.carry_forward,
+            status="carried_forward",
+            linked_session_id=plan.linked_session_id,
+        )
+
     def get_learning_response_style(self, *, scope: str = "default", scope_id: str = "") -> Optional[LearningResponseStyleRecord]:
         with self._lock:
             row = self.conn.execute(
@@ -1211,6 +1325,7 @@ class RuntimeStore:
                 "events": self._count("gateway_events"),
                 "learning_sessions": self._count("learning_sessions"),
                 "wellbeing_checkins": self._count("wellbeing_checkins"),
+                "study_plans": self._count("study_plans"),
             }
 
     def _count(self, table: str) -> int:
@@ -1383,6 +1498,20 @@ class RuntimeStore:
             care_style=str(row["care_style"] or "steady"),
             praise_style=str(row["praise_style"] or "warm"),
             correction_style=str(row["correction_style"] or "gentle"),
+            created_at=str(row["created_at"] or ""),
+            updated_at=str(row["updated_at"] or ""),
+        )
+
+    def _row_to_study_plan(self, row: sqlite3.Row) -> StudyPlanRecord:
+        return StudyPlanRecord(
+            plan_id=str(row["id"] or ""),
+            current_goal=str(row["current_goal"] or ""),
+            current_task=str(row["current_task"] or ""),
+            next_step=str(row["next_step"] or ""),
+            blocker_note=str(row["blocker_note"] or ""),
+            carry_forward=bool(int(row["carry_forward"] or 0)),
+            status=str(row["status"] or "active"),
+            linked_session_id=str(row["linked_session_id"] or ""),
             created_at=str(row["created_at"] or ""),
             updated_at=str(row["updated_at"] or ""),
         )

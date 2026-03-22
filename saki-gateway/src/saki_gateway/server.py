@@ -1621,6 +1621,20 @@ class GatewayApp:
             "created_at": record.created_at,
         }
 
+    def _serialize_study_plan(self, record: Any) -> Dict[str, Any]:
+        return {
+            "id": record.plan_id,
+            "current_goal": record.current_goal,
+            "current_task": record.current_task,
+            "next_step": record.next_step,
+            "blocker_note": record.blocker_note,
+            "carry_forward": bool(record.carry_forward),
+            "status": record.status,
+            "linked_session_id": record.linked_session_id,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+        }
+
     def _coerce_level(self, value: Any) -> Optional[int]:
         if value in {None, ""}:
             return None
@@ -1711,6 +1725,50 @@ class GatewayApp:
             for record in self.runtime_store.list_learning_session_responses(session_id=session_id, limit=max(1, min(limit, 100)))
         ]
         return {"session_id": session_id, "items": items}
+
+    def get_study_plan_payload(self) -> Dict[str, Any]:
+        plan = self.runtime_store.get_current_study_plan()
+        return {
+            "item": self._serialize_study_plan(plan) if plan else None,
+            "inspection": {
+                "source": "runtime_store",
+                "has_plan": bool(plan),
+                "last_updated_at": plan.updated_at if plan else "",
+                "linked_session_id": plan.linked_session_id if plan else "",
+            },
+        }
+
+    def update_study_plan_payload(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        active = self.runtime_store.get_active_learning_session()
+        plan = self.runtime_store.upsert_study_plan(
+            current_goal=str(body.get("current_goal", "") or "").strip(),
+            current_task=str(body.get("current_task", "") or "").strip(),
+            next_step=str(body.get("next_step", "") or "").strip(),
+            blocker_note=str(body.get("blocker_note", "") or "").strip(),
+            carry_forward=bool(body.get("carry_forward", False)),
+            status=str(body.get("status", "active") or "active").strip() or "active",
+            linked_session_id=str(body.get("linked_session_id", "") or "").strip() or (active.session_id if active else ""),
+        )
+        return self.get_study_plan_payload() | {"item": self._serialize_study_plan(plan)}
+
+    def clear_study_plan_payload(self) -> Dict[str, Any]:
+        self.runtime_store.clear_study_plan()
+        return self.get_study_plan_payload()
+
+    def complete_study_plan_payload(self, *, carry_forward: bool | None = None) -> Dict[str, Any]:
+        current = self.runtime_store.get_current_study_plan()
+        if current is None:
+            return self.get_study_plan_payload()
+        plan = self.runtime_store.upsert_study_plan(
+            current_goal=current.current_goal,
+            current_task=current.current_task,
+            next_step=current.next_step if (carry_forward if carry_forward is not None else current.carry_forward) else "",
+            blocker_note=current.blocker_note if (carry_forward if carry_forward is not None else current.carry_forward) else "",
+            carry_forward=(carry_forward if carry_forward is not None else current.carry_forward),
+            status="carried_forward" if (carry_forward if carry_forward is not None else current.carry_forward) and current.next_step else "step_completed",
+            linked_session_id=current.linked_session_id,
+        )
+        return self.get_study_plan_payload() | {"item": self._serialize_study_plan(plan)}
 
     def get_learning_response_style_payload(self, session_id: str = "") -> Dict[str, Any]:
         return {"session_id": session_id, "style": self._effective_learning_response_style(session_id)}
@@ -4015,6 +4073,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 window_days = int(query.get("window_days", ["7"])[0] or "7")
                 self._json(HTTPStatus.OK, app.get_learning_progress_payload(window_days=window_days, session_limit=session_limit))
                 return
+            if parsed.path == "/api/study-plan":
+                self._json(HTTPStatus.OK, app.get_study_plan_payload())
+                return
             if parsed.path.startswith("/api/learning-sessions/"):
                 tail = parsed.path.removeprefix("/api/learning-sessions/").strip("/")
                 if tail and "/" not in tail:
@@ -4117,6 +4178,21 @@ class RequestHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/learning-sessions/style":
                 session_id = parse_qs(parsed.query).get("session_id", [""])[0]
                 self._json(HTTPStatus.OK, app.update_learning_response_style_payload(body, session_id=session_id))
+                return
+            if parsed.path == "/api/study-plan":
+                self._json(HTTPStatus.OK, app.update_study_plan_payload(body))
+                return
+            if parsed.path == "/api/study-plan/clear":
+                self._json(HTTPStatus.OK, app.clear_study_plan_payload())
+                return
+            if parsed.path == "/api/study-plan/complete":
+                carry_forward = body.get("carry_forward")
+                self._json(
+                    HTTPStatus.OK,
+                    app.complete_study_plan_payload(
+                        carry_forward=bool(carry_forward) if carry_forward is not None else None
+                    ),
+                )
                 return
             if parsed.path.startswith("/api/learning-sessions/"):
                 tail = parsed.path.removeprefix("/api/learning-sessions/").strip("/")
