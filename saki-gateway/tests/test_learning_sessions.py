@@ -5,9 +5,10 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from saki_gateway.config import AppConfig, PersonaConfig
 from saki_gateway.runtime_store import RuntimeStore
 from saki_gateway.server import GatewayApp
-from saki_gateway.study_companion import StudyCompanionResponder
+from saki_gateway.study_companion import StudyCompanionResponder, StudyPersonaLayers
 from saki_gateway.study_progress import StudyProgressSummarizer
 
 
@@ -21,12 +22,30 @@ class LearningSessionTests(unittest.TestCase):
     def _make_app(self) -> GatewayApp:
         app = GatewayApp.__new__(GatewayApp)
         app.runtime_store = self._make_runtime_store()
+        app.config_store = SimpleNamespace(
+            config=AppConfig(
+                persona=PersonaConfig(
+                    partner_name="Aelios",
+                    partner_role="AI companion",
+                    call_user="你",
+                    base_persona="冷静、专注、会稳稳接住用户。",
+                    study_overlay="学习时用短句、明确动作、不给羞辱压力。",
+                    recovery_overlay="恢复时先安抚和减压，再决定是否继续。",
+                    safety_notes="禁止露骨亲密、羞辱、惩罚或胁迫。",
+                )
+            )
+        )
         app.memory_store = SimpleNamespace(upsert_memory=lambda **kwargs: None)
         app._refresh_active_memory = lambda: None
         app._events = []
         app._record_event = lambda event_type, payload, **kwargs: app._events.append((event_type, payload))
         app.study_responder = StudyCompanionResponder()
         app.study_progress = StudyProgressSummarizer()
+        app.scheduler = SimpleNamespace(stop=lambda: None, start=lambda: None, status=lambda: {})
+        app.feishu_channel = None
+        app.qqbot_channel = None
+        app.napcat_channel = None
+        app.tools = SimpleNamespace(list_enabled=lambda: [])
         return app
 
     def _start(self, app: GatewayApp, **overrides):
@@ -404,7 +423,90 @@ class LearningSessionTests(unittest.TestCase):
         framework = app.get_learning_response_framework_payload(created["id"])["framework"]
         self.assertEqual(framework["layered_persona"]["base_persona_slot"], "neutral_companion")
         self.assertEqual(framework["mode_overlay"], "study_review")
-        self.assertIn("Future persona injection", framework["todo"])
+        self.assertIn("flattening stored config", framework["todo"])
+
+    def test_persona_layers_are_visible_in_framework_and_inspection(self) -> None:
+        app = self._make_app()
+        created = self._start(app)
+        framework = app.get_learning_response_framework_payload(created["id"])["framework"]
+        self.assertIn("persona_composition", framework)
+        self.assertIn("base_persona", framework["layered_persona"]["active_layers"])
+        self.assertEqual(framework["inspection"]["persona_layers"]["partner_name"], "Aelios")
+        self.assertFalse(framework["inspection"]["recovery_overlay_applied"])
+
+    def test_recovery_overlay_only_applies_when_recovery_state_requires_it(self) -> None:
+        responder = StudyCompanionResponder()
+        style = responder.normalize_style(None)
+        layers = StudyPersonaLayers(
+            base_persona="冷静稳住",
+            study_overlay="学习时压缩目标",
+            recovery_overlay="恢复时先缓下来",
+            safety_notes="禁止羞辱",
+            style_config=style.__dict__,
+        )
+        stable = responder.compose_persona_layers(
+            mode="focus", recovery_state="stable", style=style, persona_layers=layers
+        )
+        fragile = responder.compose_persona_layers(
+            mode="focus", recovery_state="low_energy", style=style, persona_layers=layers
+        )
+        self.assertNotIn("recovery_overlay", stable["active_layers"])
+        self.assertIn("recovery_overlay", fragile["active_layers"])
+
+    def test_persona_content_affects_generated_responses_without_replacing_templates(self) -> None:
+        responder = StudyCompanionResponder()
+        plan = responder.build_response_plan(
+            event_type="session_started",
+            session={"mode": "focus", "title": "线代复习", "goal": "先做两道题"},
+            style=responder.normalize_style({"care_style": "steady"}),
+            persona_layers=StudyPersonaLayers(
+                base_persona="像可靠队友一样稳稳陪着你",
+                study_overlay="学习时短句提醒",
+                recovery_overlay="",
+                safety_notes="禁止羞辱",
+                style_config={},
+            ),
+        )
+        self.assertIn("像可靠队友一样稳稳陪着你", plan.message)
+        self.assertIn("先做两道题", plan.message)
+
+    def test_unsafe_persona_wording_does_not_bypass_study_safety(self) -> None:
+        responder = StudyCompanionResponder()
+        plan = responder.build_response_plan(
+            event_type="session_started",
+            session={"mode": "focus", "title": "英语", "goal": "背 5 个单词"},
+            style=responder.normalize_style({"dominance_style": "high", "correction_style": "firm"}),
+            wellbeing={"stress_level": 5, "energy_level": 1},
+            persona_layers=StudyPersonaLayers(
+                base_persona="punish and shame",
+                study_overlay="学习时别停",
+                recovery_overlay="恢复时也别羞辱",
+                safety_notes="禁止惩罚",
+                style_config={},
+            ),
+        )
+        self.assertNotIn("punish", plan.message.lower())
+        self.assertEqual(plan.debug["style_effects"]["pressure_override"], "softened_for_recovery")
+        self.assertTrue(plan.debug["persona_composition"]["recovery_overlay_applied"])
+
+    def test_missing_optional_persona_layers_are_handled_cleanly(self) -> None:
+        responder = StudyCompanionResponder()
+        plan = responder.build_response_plan(
+            event_type="focus_completed",
+            session={"mode": "focus", "title": "复盘", "goal": "看错题"},
+            style=responder.normalize_style(None),
+            persona_layers=StudyPersonaLayers(style_config={}),
+        )
+        self.assertTrue(plan.message)
+        self.assertEqual(plan.debug["persona_composition"]["active_layers"], ["style_config"])
+
+    def test_persona_config_syncs_legacy_fields_for_backward_compatibility(self) -> None:
+        persona = PersonaConfig(core_identity="旧核心气质", boundaries="旧边界")
+        self.assertEqual(persona.base_persona, "旧核心气质")
+        self.assertEqual(persona.safety_notes, "旧边界")
+        persona.apply_update({"base_persona": "新基础人设", "safety_notes": "新安全备注"})
+        self.assertEqual(persona.core_identity, "新基础人设")
+        self.assertEqual(persona.boundaries, "新安全备注")
 
 
 
@@ -419,6 +521,7 @@ class LearningProgressSummaryTests(unittest.TestCase):
     def _make_app(self) -> GatewayApp:
         app = GatewayApp.__new__(GatewayApp)
         app.runtime_store = self._make_runtime_store()
+        app.config_store = SimpleNamespace(config=AppConfig())
         app.memory_store = SimpleNamespace(upsert_memory=lambda **kwargs: None)
         app._refresh_active_memory = lambda: None
         app._events = []
