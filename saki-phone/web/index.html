@@ -2,18 +2,17 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>咲手机</title>
-  <meta name="theme-color" content="#F3E5E9">
+  <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="咲手机">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/app-icon.png">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>
     (function () {
       if (!('serviceWorker' in navigator) || !('caches' in window)) return;
@@ -32,1126 +31,1150 @@
     })();
   </script>
   <style>
-/* ========================================
-   CSS Variables - Romantic Glassmorphism
-   ======================================== */
 :root {
-  --bg-base: #F3E5E9;
-  --bg-gradient-start: #F5E8EC;
-  --bg-gradient-end: #E3C1CB;
-  --petal-pink: #F8D7E0;
-  --deep-mauve: #8E606D;
-  --text-shadow-color: rgba(142, 96, 109, 0.2);
-  --glass-surface: rgba(255, 255, 255, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.6);
-  --glass-highlight: rgba(255, 255, 255, 0.8);
-  --primary-text: #6A444F;
-  --secondary-text: #9C7883;
-  --white: #FFFFFF;
-  --accent: #D68C9E;
-  --accent-light: #F0C6D0;
-  --success: #A6E2B6;
-  --success-dark: #5CB85C;
-  --danger: #E57373;
-  --danger-bg: rgba(229,115,115,0.12);
-  --warning: #FFB74D;
-  --warning-bg: rgba(255,183,77,0.12);
-  --info: #7BAAF7;
-  --info-bg: rgba(123,170,247,0.12);
-  --radius-lg: 32px;
-  --radius-md: 24px;
-  --radius-sm: 16px;
-  --radius-xs: 10px;
-  --space-xs: 8px;
-  --space-sm: 16px;
-  --space-md: 24px;
-  --space-lg: 32px;
-  --font-display: 'Cinzel Decorative', cursive;
-  --font-body: 'Quicksand', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f9fafb;
+  --surface-soft: #f3f4f6;
+  --text: #1a1a1a;
+  --text-secondary: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --danger: #dc2626;
+  --success: #059669;
+  --header-height: 48px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.04);
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* ========================================
-   Reset & Base
-   ======================================== */
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; overflow: hidden; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
 body {
-  font-family: var(--font-body);
-  background-color: var(--bg-base);
-  color: var(--primary-text);
-  display: flex; justify-content: center; align-items: center;
-}
-
-/* ========================================
-   Device Frame
-   ======================================== */
-.device {
-  width: 100%; height: 100%; max-width: 420px;
-  background: linear-gradient(160deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-  position: relative; overflow: hidden;
-  display: flex; flex-direction: column;
-}
-
-/* Ambient flower blurs */
-.ambient-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
-.flower-blur { position: absolute; border-radius: 50%; filter: blur(20px); opacity: 0.6; }
-.flower-blur.f1 { width: 300px; height: 300px; top: -50px; left: -100px; background: radial-gradient(circle, rgba(255,230,235,0.8) 0%, transparent 70%); }
-.flower-blur.f2 { width: 250px; height: 250px; bottom: 100px; right: -80px; background: radial-gradient(circle, rgba(248,215,224,0.6) 0%, transparent 70%); }
-.flower-blur.f3 { width: 150px; height: 150px; top: 40%; left: 60%; background: radial-gradient(circle, rgba(255,230,235,0.8) 0%, transparent 70%); }
-
-/* ========================================
-   SVG Icon System
-   ======================================== */
-.icon { width: 22px; height: 22px; display: inline-block; vertical-align: middle; flex-shrink: 0; }
-.icon-sm { width: 16px; height: 16px; }
-.icon-lg { width: 28px; height: 28px; }
-.icon-xl { width: 48px; height: 48px; }
-svg.icon, svg.icon-sm, svg.icon-lg, svg.icon-xl { fill: none; stroke: currentColor; }
-
-/* ========================================
-   Status Bar
-   ======================================== */
-.status-bar {
-  height: 44px; padding: 0 var(--space-md);
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 14px; font-weight: 600; color: var(--primary-text);
-  z-index: 10; mix-blend-mode: multiply;
-}
-.status-icons { display: flex; gap: 6px; align-items: center; }
-
-/* ========================================
-   Main Content Container
-   ======================================== */
-.content-area {
-  flex: 1; z-index: 5; position: relative; overflow: hidden;
-}
-
-/* Pages */
-.page {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  display: none; flex-direction: column;
-  overflow-y: auto; overflow-x: hidden;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.page::-webkit-scrollbar { display: none; }
-.page.active { display: flex; animation: fadeIn 0.25s ease-out; }
-
-.page-inner {
-  padding: 0 var(--space-md) 100px var(--space-md);
-  flex: 1;
-}
-
-/* ========================================
-   Glass Card
-   ======================================== */
-.card {
-  background: var(--glass-surface);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  margin-bottom: var(--space-sm);
-  box-shadow: 0 8px 32px rgba(142,96,109,0.08);
-  position: relative; overflow: hidden;
-}
-.card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
-  opacity: 0.5;
-}
-
-/* ========================================
-   Page Header
-   ======================================== */
-.page-header {
-  display: flex; align-items: center; gap: var(--space-xs);
-  padding: var(--space-sm) 0;
-  position: sticky; top: 0;
-  background: linear-gradient(to bottom, var(--bg-gradient-start) 60%, transparent);
-  z-index: 5;
-}
-.page-header .page-title {
-  flex: 1; font-family: var(--font-display); font-size: 18px;
-  color: var(--primary-text); font-weight: 700;
-}
-.page-actions {
-  display: flex; align-items: center; gap: 8px;
-}
-.back-btn {
-  display: flex; align-items: center; gap: 2px;
-  background: none; border: none; color: var(--deep-mauve);
-  font-family: var(--font-body); font-size: 14px; font-weight: 600;
-  cursor: pointer; padding: 6px 4px;
-}
-.back-btn svg { width: 18px; height: 18px; }
-
-/* ========================================
-   HOME PAGE
-   ======================================== */
-.home-header {
-  margin-top: var(--space-sm); margin-bottom: var(--space-lg);
-  text-align: center;
-}
-.home-header h1 {
-  font-family: var(--font-display); color: var(--white);
-  font-size: 28px; font-weight: 700;
-  text-shadow: 0 4px 12px var(--text-shadow-color);
-  margin-bottom: 4px;
-}
-.home-header .subtitle {
-  color: var(--deep-mauve); font-size: 13px; font-weight: 500;
-  letter-spacing: 1px; text-transform: uppercase; opacity: 0.8;
-}
-
-/* Partner Card */
-.partner-card {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 32px var(--space-md);
-  background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.1) 100%);
-}
-.avatar-container {
-  width: 96px; height: 96px; border-radius: 50%;
-  border: 3px solid var(--white);
-  box-shadow: 0 8px 20px rgba(142,96,109,0.15);
-  background: #E8D0D6; margin-bottom: var(--space-sm);
-  position: relative; display: flex; justify-content: center; align-items: center;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
 }
-.avatar-placeholder { width: 100%; height: 100%; background: linear-gradient(to bottom, #F3E5E9, #DDBBC4); }
-.avatar-status {
-  position: absolute; bottom: 4px; right: 4px;
-  width: 16px; height: 16px; background: var(--success);
-  border: 2px solid var(--white); border-radius: 50%;
-}
-.partner-name {
-  font-family: var(--font-display); font-size: 24px;
-  color: var(--primary-text); margin-bottom: 4px;
-}
-.gateway-status-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(255,255,255,0.5);
-  padding: 4px 12px; border-radius: 20px;
-  font-size: 12px; color: var(--deep-mauve); font-weight: 600;
-}
-.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
-.status-dot.online { background: var(--success); }
-.status-dot.offline { background: var(--danger); }
 
-/* Action Grid */
-.grid-2 {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: var(--space-sm); margin-bottom: var(--space-sm);
-}
-.action-card {
-  display: flex; flex-direction: column; justify-content: space-between;
-  height: 120px; cursor: pointer; transition: transform 0.2s ease;
-}
-.action-card:active { transform: scale(0.97); }
-.icon-box {
-  width: 40px; height: 40px;
-  background: rgba(255,255,255,0.6); border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--deep-mauve); font-size: 20px;
-}
-.card-label { font-size: 15px; font-weight: 600; color: var(--primary-text); }
-.card-sub { font-size: 12px; color: var(--secondary-text); }
-
-/* List Group */
-.list-group {
-  background: var(--glass-surface);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border-radius: var(--radius-md); padding: 8px;
-  border: 1px solid var(--glass-border);
-  margin-bottom: var(--space-sm);
-}
-.list-item {
-  display: flex; align-items: center;
-  padding: 14px; border-radius: var(--radius-sm);
-  transition: background 0.2s; cursor: pointer;
-}
-.list-item:active { background: rgba(255,255,255,0.3); }
-.list-icon {
-  width: 36px; height: 36px;
-  background: rgba(255,255,255,0.5); border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  margin-right: 14px; color: var(--deep-mauve);
-}
-.list-content { flex: 1; }
-.list-title { font-size: 15px; font-weight: 600; color: var(--primary-text); margin-bottom: 2px; }
-.list-desc { font-size: 12px; color: var(--secondary-text); }
-.chevron { color: var(--secondary-text); opacity: 0.5; font-size: 18px; }
-
-/* Section Title */
-.section-header {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin: var(--space-md) 0 var(--space-sm);
-  padding: 0 4px;
-}
-.section-title { font-family: var(--font-display); color: var(--primary-text); font-size: 18px; }
-.section-link { font-size: 12px; color: var(--deep-mauve); font-weight: 600; cursor: pointer; }
-
-/* Chat Preview */
-.message-preview {
-  background: rgba(255,255,255,0.7);
-  padding: var(--space-sm); border-radius: 20px 20px 20px 4px;
-  box-shadow: 0 4px 12px rgba(142,96,109,0.05);
-  display: flex; gap: 12px; cursor: pointer;
-}
-.msg-avatar { width: 32px; height: 32px; border-radius: 50%; background: #DDBBC4; flex-shrink: 0; }
-.msg-content { flex: 1; }
-.msg-name { font-size: 12px; font-weight: 700; color: var(--deep-mauve); margin-bottom: 4px; }
-.msg-text { font-size: 14px; color: var(--primary-text); line-height: 1.4; }
-
-/* ========================================
-   CHAT PAGE
-   ======================================== */
-.chat-page-header {
-  display: flex; align-items: center; padding: 8px var(--space-sm);
-  background: rgba(255,255,255,0.5);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--glass-border);
-  z-index: 5;
-}
-.chat-page-header .page-title { flex: 1; text-align: center; }
-.chat-messages {
-  flex: 1; overflow-y: auto; padding: var(--space-sm);
-  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
-  scrollbar-width: none;
-}
-.chat-messages::-webkit-scrollbar { display: none; }
-
-.chat-message { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
-.chat-message.user { flex-direction: row-reverse; }
-.chat-message.system { justify-content: center; }
-.chat-message .message-avatar {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: rgba(255,255,255,0.6); display: flex;
-  align-items: center; justify-content: center; flex-shrink: 0;
-  color: var(--deep-mauve);
-}
-.chat-message .message-body { max-width: 75%; }
-.chat-message .message-header {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 4px; font-size: 11px; color: var(--secondary-text);
-}
-.chat-message.user .message-header { flex-direction: row-reverse; }
-.chat-message .message-bubble-inner {
-  background: rgba(255,255,255,0.7); padding: 12px 16px;
-  border-radius: 18px 18px 18px 4px;
-  box-shadow: 0 2px 8px rgba(142,96,109,0.06);
-  font-size: 14px; line-height: 1.5; color: var(--primary-text);
-  word-break: break-word;
-}
-.chat-message.user .message-bubble-inner {
-  background: linear-gradient(135deg, var(--petal-pink), var(--accent-light));
-  border-radius: 18px 18px 4px 18px;
-  color: var(--primary-text);
-}
-.chat-message.system .system-content {
-  background: rgba(255,255,255,0.4); padding: 6px 14px;
-  border-radius: 12px; font-size: 12px; color: var(--secondary-text);
+body {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 var(--font-body);
 }
 
-/* Tool context indicator */
-.tool-context-indicator {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 10px; border-radius: 8px;
-  background: var(--info-bg); font-size: 11px; color: var(--info);
-  margin-bottom: 6px;
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
-/* Typing indicator */
-.typing-dots { display: flex; gap: 4px; padding: 4px 0; }
-.typing-dots span {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--secondary-text); animation: typing 1s infinite;
+button {
+  border: none;
+  background: none;
+  color: inherit;
 }
-.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 
-/* Chat input */
-.chat-input-area {
-  display: flex; align-items: flex-end; gap: 8px;
-  padding: 10px var(--space-sm); padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-  background: rgba(255,255,255,0.6);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid var(--glass-border);
-  position: sticky;
-  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
-  z-index: 40;
+svg.icon,
+svg.icon-sm,
+svg.icon-lg,
+svg.icon-xl {
+  fill: none;
+  stroke: currentColor;
 }
-.chat-input-area textarea {
-  flex: 1; border: 1px solid var(--glass-border);
-  background: rgba(255,255,255,0.6); border-radius: 20px;
-  padding: 10px 16px; font-size: 14px; font-family: var(--font-body);
-  color: var(--primary-text); resize: none; outline: none;
-  max-height: 100px; line-height: 1.4;
-}
-.chat-input-area textarea:focus { border-color: var(--accent); }
-.chat-tool-btn {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: rgba(255,255,255,0.5); border: none;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--deep-mauve); cursor: pointer; flex-shrink: 0;
-}
-.chat-send-btn {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), var(--deep-mauve));
-  border: none; display: flex; align-items: center; justify-content: center;
-  color: white; cursor: pointer; flex-shrink: 0;
-}
-.chat-send-btn svg { stroke: white; }
 
-/* ========================================
-   MEMORY PAGE
-   ======================================== */
-.memory-tabs {
-  display: flex; gap: 6px; overflow-x: auto;
-  padding: 4px 0 var(--space-sm);
-  scrollbar-width: none;
+.icon { width: 20px; height: 20px; }
+.icon-sm { width: 16px; height: 16px; }
+.icon-lg { width: 24px; height: 24px; }
+.icon-xl { width: 40px; height: 40px; }
+
+.app-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
 }
-.memory-tabs::-webkit-scrollbar { display: none; }
-.memory-tab {
-  display: flex; align-items: center; gap: 4px;
-  padding: 8px 14px; border-radius: 20px;
-  background: rgba(255,255,255,0.4); border: 1px solid var(--glass-border);
-  font-size: 12px; font-weight: 600; color: var(--secondary-text);
-  white-space: nowrap; cursor: pointer; flex-shrink: 0;
-}
-.memory-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
-.tab-count { font-size: 10px; opacity: 0.7; }
-.memory-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-xs);
-}
-.memory-card {
-  background: var(--glass-surface); border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm); overflow: hidden;
-}
-.memory-card-header {
-  padding: 10px; display: flex; align-items: center; justify-content: space-between;
-}
-.memory-card-body { padding: 0 10px 10px; }
-.memory-title { font-size: 13px; font-weight: 700; color: var(--primary-text); margin-bottom: 4px; }
-.memory-content { font-size: 12px; color: var(--secondary-text); line-height: 1.4;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.memory-card-footer {
-  display: flex; justify-content: flex-end; gap: 4px;
-  padding: 6px 10px; border-top: 1px solid rgba(255,255,255,0.3);
-}
-.memory-date { font-size: 10px; color: var(--secondary-text); }
-.memory-log-list {
+
+.status-bar {
+  height: 28px;
+  padding: env(safe-area-inset-top, 0px) 16px 0;
   display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.status-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-stack {
+  position: relative;
+  width: 100%;
+  height: calc(100% - 28px - env(safe-area-inset-top, 0px));
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  display: none;
   flex-direction: column;
-  gap: var(--space-xs);
+  background: var(--bg);
 }
-.memory-log-card {
-  background: rgba(255,255,255,0.42);
+
+.page.active {
+  display: flex;
 }
-.memory-log-header {
-  cursor: pointer;
+
+.page-header,
+.chat-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: var(--header-height);
+  min-height: var(--header-height);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.96);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
-.memory-log-main {
-  min-width: 0;
-  flex: 1;
-}
-.memory-log-main .memory-title {
-  margin-bottom: 0;
-  margin-top: 4px;
-}
-.memory-log-side {
+
+.header-left,
+.header-title-group,
+.page-actions,
+.status-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
 }
-.memory-log-badge {
+
+.page-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.icon-btn,
+.back-btn,
+.action-btn,
+.chat-tool-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(214,140,158,0.18);
-  color: var(--deep-mauve);
-  font-size: 10px;
-  font-weight: 700;
-}
-.memory-log-toggle-label {
-  font-size: 11px;
-  color: var(--secondary-text);
-  font-weight: 600;
-}
-.memory-log-body {
-  display: none;
-}
-.memory-log-body.expanded {
-  display: block;
-}
-.memory-log-content {
-  font-size: 12px;
-  color: var(--primary-text);
-  line-height: 1.6;
-  white-space: pre-wrap;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: var(--surface);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-/* ========================================
-   STUDY PAGE
-   ======================================== */
-.study-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
+.back-btn {
+  width: auto;
+  padding: 0 10px;
+  gap: 4px;
+  font-size: 13px;
 }
-.study-workspace-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.95fr);
-  gap: 16px;
-  align-items: start;
+
+.page-body,
+.page-inner,
+.chat-messages {
+  min-height: 0;
 }
-.study-workspace-main,
-.study-workspace-side {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+
+.page-body,
+.page-inner {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
-.study-card {
-  background: rgba(255, 255, 255, 0.54);
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  border-radius: 24px;
-  padding: 18px;
-  box-shadow: 0 10px 28px rgba(142,96,109,0.06);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+
+.page-section {
+  margin-bottom: 24px;
 }
-.study-card-subtle {
-  background: rgba(255, 255, 255, 0.42);
-}
-.study-card h4 {
-  margin: 0;
-  font-size: 18px;
-  color: var(--primary-text);
+
+.section-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-.study-eyebrow {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--secondary-text);
-  margin-bottom: 8px;
-}
-.study-section-head,
-.study-shell-header {
-  display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  margin-bottom: 12px;
 }
-.study-shell-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
-.study-hero-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.9fr);
-  gap: 12px;
-  margin-top: 18px;
+
+.section-link {
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
 }
-.study-hero-panel {
-  border-radius: 20px;
-  padding: 16px;
-  background: rgba(255,255,255,0.42);
-  border: 1px solid rgba(255,255,255,0.42);
-}
+
+.card,
+.list-group,
+.memory-card,
+.memory-log-card,
+.study-card,
+.settings-section,
+.message-preview,
+.reminder-item,
+.ai-memory-item,
+.study-empty,
+.gateway-info-item,
+.study-stat,
+.study-plan-line,
+.study-log-item,
+.study-hero-panel,
+.study-support-callout,
+.study-tool-btn,
+.study-pill,
+.study-stat.prominent,
+.study-log-item,
 .study-hero-panel-primary {
-  background: linear-gradient(160deg, rgba(255,255,255,0.62), rgba(240,198,208,0.28));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
 }
-.study-hero-kicker {
-  font-size: 12px;
-  color: var(--secondary-text);
-  margin-bottom: 8px;
+
+.card,
+.study-card,
+.settings-section {
+  padding: 16px;
 }
-.study-hero-title {
-  font-size: 24px;
-  line-height: 1.2;
-  font-weight: 700;
-  color: var(--primary-text);
-}
-.study-hero-copy {
-  margin-top: 8px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--secondary-text);
-}
-.study-mini-stat-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.study-mini-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.study-mini-stat span {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--secondary-text);
-}
-.study-mini-stat strong {
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--primary-text);
-}
-.study-workbench-strip {
-  margin-top: 18px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.study-tool-btn {
-  border: 1px solid rgba(255,255,255,0.44);
-  background: rgba(255,255,255,0.42);
-  color: var(--primary-text);
-  border-radius: 18px;
-  padding: 14px;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
 }
-.study-tool-btn.primary {
-  background: linear-gradient(135deg, rgba(240,198,208,0.5), rgba(189,177,244,0.28));
-  border-color: rgba(214,140,158,0.45);
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
-.study-tool-title {
-  font-weight: 700;
-  font-size: 14px;
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
 }
-.study-tool-desc,
-.study-note {
-  font-size: 12px;
-  color: var(--secondary-text);
-  line-height: 1.6;
+
+.btn-danger {
+  border-color: #fecaca;
+  color: var(--danger);
+  background: #fff;
 }
-.study-session-overview {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+
+.btn-sm {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
 }
-.study-session-title {
-  font-size: 22px;
-  line-height: 1.25;
-  font-weight: 700;
-  color: var(--primary-text);
-  margin-bottom: 6px;
+
+.btn-block,
+.btn-save {
+  width: 100%;
 }
+
+.form-group,
+.setting-item {
+  margin-bottom: 12px;
+}
+
+.form-row,
+.study-form-grid,
 .study-meta-grid,
-.study-form-grid {
+.gateway-info-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
-.study-form-grid.compact {
-  gap: 12px 10px;
-}
+
+.form-row .form-group,
 .study-form-grid .form-group,
 .study-form-grid .setting-item {
   margin-bottom: 0;
 }
-.study-form-grid .full {
-  grid-column: 1 / -1;
-}
-.study-metric-band {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-}
-.study-metric-band.compact {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.study-stat {
-  background: rgba(255,255,255,0.38);
-  border-radius: 16px;
-  padding: 12px;
-}
-.study-stat.prominent {
-  background: rgba(255,255,255,0.62);
-}
-.study-stat-label {
-  font-size: 11px;
-  color: var(--secondary-text);
+
+.form-group label,
+.setting-item label,
+.study-eyebrow,
+.study-stat-label,
+.gateway-info-label {
+  display: block;
   margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
-.study-stat-value {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--primary-text);
-  line-height: 1.35;
+
+.form-group input,
+.form-group textarea,
+.form-group select,
+.setting-item input[type="text"],
+.setting-item input[type="password"],
+.setting-item input[type="number"],
+.setting-item textarea,
+.setting-item select,
+#memory-search,
+.chat-input-area textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 12px;
+  outline: none;
 }
-.study-inline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-.study-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 7px 11px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.42);
-  border: 1px solid rgba(255,255,255,0.45);
-  font-size: 11px;
-  color: var(--secondary-text);
-}
-.study-pill.active {
-  background: var(--accent);
-  color: white;
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus,
+.setting-item input:focus,
+.setting-item textarea:focus,
+.setting-item select:focus,
+#memory-search:focus,
+.chat-input-area textarea:focus {
   border-color: var(--accent);
 }
-.study-support-callout {
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(255,255,255,0.46);
-  border: 1px solid rgba(255,255,255,0.38);
-}
-.study-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-.study-actions-primary {
-  margin-top: 16px;
-}
-.study-log-list {
+
+.home-hero {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
+  margin-bottom: 24px;
 }
-.study-log-item {
-  background: rgba(255,255,255,0.34);
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 16px;
-  padding: 12px 14px;
-}
-.study-log-head {
+
+.partner-card {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.partner-top {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 12px;
 }
-.study-log-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--primary-text);
-}
-.study-log-time {
-  font-size: 11px;
-  color: var(--secondary-text);
-}
-.study-log-body {
-  font-size: 13px;
-  color: var(--primary-text);
-  line-height: 1.6;
-}
-.study-log-meta {
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--secondary-text);
+
+.avatar-container,
+.msg-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
 }
-.study-feed-grid {
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+.partner-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.gateway-status-badge,
+.reminder-status,
+.study-pill,
+.memory-log-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.status-dot.online { background: var(--success); }
+.status-dot.offline { background: #9ca3af; }
+
+.grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.study-feed-column {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.study-feed-heading {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--secondary-text);
-}
-.study-plan-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.study-plan-line {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.34);
-}
-.study-plan-line span {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--secondary-text);
-}
-.study-plan-line strong {
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--primary-text);
-}
-.study-balance-bar {
-  display: flex;
-  width: 100%;
-  height: 10px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.45);
-  margin: 12px 0 14px;
-}
-.study-balance-focus { background: linear-gradient(135deg, #f2a6bb, #d68c9e); }
-.study-balance-review { background: linear-gradient(135deg, #bdb1f4, #8f83d8); }
-.study-balance-recovery { background: linear-gradient(135deg, #9fd9c2, #6eb894); }
-.study-empty {
+
+.action-card {
   padding: 16px;
-  border-radius: 18px;
-  background: rgba(255,255,255,0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 112px;
+  cursor: pointer;
+}
+
+.icon-box,
+.list-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.card-label,
+.list-title,
+.reminder-content,
+.study-log-title,
+.study-tool-title,
+.memory-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.card-sub,
+.list-desc,
+.msg-name,
+.msg-text,
+.reminder-meta,
+.memory-date,
+.ai-memory-time,
+.study-log-time,
+.study-note,
+.study-tool-desc,
+.study-hero-copy,
+.study-mini-stat span,
+.study-mini-stat strong,
+.study-plan-line span,
+.study-plan-line strong,
+.study-log-meta,
+.about-info,
+.empty-text {
+  color: var(--text-secondary);
   font-size: 13px;
-  color: var(--secondary-text);
-  text-align: center;
-  line-height: 1.6;
-}
-@media (max-width: 920px) {
-  .study-workspace-shell,
-  .study-hero-grid,
-  .study-workbench-strip,
-  .study-feed-grid,
-  .study-metric-band {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 420px) {
-  .study-section-head,
-  .study-shell-header,
-  .study-session-overview,
-  .study-meta-grid,
-  .study-form-grid,
-  .study-metric-band.compact {
-    grid-template-columns: 1fr;
-    flex-direction: column;
-  }
-  .study-card {
-    padding: 16px;
-  }
-  .study-session-title,
-  .study-hero-title {
-    font-size: 20px;
-  }
 }
 
-/* AI Memories */
-.ai-memory-item {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 10px; border-radius: var(--radius-xs);
-  background: rgba(255,255,255,0.3); margin-bottom: 6px;
-}
-.ai-memory-content { flex: 1; font-size: 13px; color: var(--primary-text); line-height: 1.4; }
-.ai-memory-time { font-size: 10px; color: var(--secondary-text); }
-.ai-memory-delete {
-  background: none; border: none; color: var(--danger); cursor: pointer;
-  padding: 2px;
+.list-group {
+  padding: 8px;
 }
 
-/* ========================================
-   REMINDERS PAGE
-   ======================================== */
-.reminder-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px; border-radius: var(--radius-sm);
-  background: rgba(255,255,255,0.4); margin-bottom: 8px;
+.list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
 }
-.reminder-info { flex: 1; }
-.reminder-content { font-size: 14px; font-weight: 600; color: var(--primary-text); }
-.reminder-meta { font-size: 11px; color: var(--secondary-text); margin-top: 2px; }
-.reminder-status {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: 10px;
-  font-size: 10px; font-weight: 600;
-}
-.reminder-status.pending { background: var(--warning-bg); color: var(--warning); }
-.reminder-status.delivered { background: rgba(166,226,182,0.2); color: var(--success-dark); }
 
-/* ========================================
-   SETTINGS PAGE
-   ======================================== */
-.settings-section {
-  background: var(--glass-surface); border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md); padding: var(--space-sm);
-  margin-bottom: var(--space-sm);
+.message-preview {
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  cursor: pointer;
 }
-.settings-section h4 {
-  font-size: 14px; font-weight: 700; color: var(--deep-mauve);
-  margin-bottom: var(--space-sm); display: flex; align-items: center; gap: 6px;
+
+.msg-content {
+  flex: 1;
+  min-width: 0;
 }
-.setting-item {
+
+.msg-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.chat-page {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+.chat-page-header .page-title {
+  flex: 1;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+.chat-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.chat-message.user {
+  justify-content: flex-end;
+}
+
+.chat-message.system {
+  justify-content: center;
+}
+
+.chat-message .message-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.chat-message.user .message-avatar {
+  display: none;
+}
+
+.chat-message .message-body {
+  max-width: 80%;
+}
+
+.chat-message .message-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.chat-message.user .message-header {
+  justify-content: flex-end;
+}
+
+.chat-message .message-bubble-inner,
+.chat-message .system-content {
+  border-radius: 12px;
+  padding: 12px 14px;
+  word-break: break-word;
+}
+
+.chat-message .message-bubble-inner {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.chat-message.user .message-bubble-inner {
+  background: var(--accent);
+  color: #fff;
+}
+
+.chat-message.system .system-content {
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.tool-context-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.typing-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #9ca3af;
+  animation: typing 1s infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+.chat-input-area {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.chat-input-area textarea {
+  min-height: 44px;
+  max-height: 100px;
+  resize: none;
+  line-height: 1.5;
+}
+
+.chat-send-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.chat-send-btn svg {
+  stroke: #fff;
+}
+
+.memory-toolbar {
+  position: relative;
   margin-bottom: 12px;
 }
-.setting-item label {
-  display: block; font-size: 12px; font-weight: 600;
-  color: var(--secondary-text); margin-bottom: 4px;
-}
-.setting-item input[type="text"],
-.setting-item input[type="password"],
-.setting-item input[type="number"],
-.setting-item select,
-.setting-item textarea {
-  width: 100%; border: 1px solid var(--glass-border);
-  background: rgba(255,255,255,0.5); border-radius: var(--radius-xs);
-  padding: 10px 12px; font-size: 13px; font-family: var(--font-body);
-  color: var(--primary-text); outline: none;
-}
-.setting-item input:focus,
-.setting-item select:focus,
-.setting-item textarea:focus { border-color: var(--accent); }
-.setting-item.toggle {
-  display: flex; justify-content: space-between; align-items: center;
-}
-.setting-item.toggle label { margin-bottom: 0; }
-.switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider {
-  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-  background: #ccc; border-radius: 24px; transition: 0.3s;
-}
-.slider::before {
-  content: ''; position: absolute; height: 18px; width: 18px;
-  left: 3px; bottom: 3px; background: white; border-radius: 50%;
-  transition: 0.3s;
-}
-.switch input:checked + .slider { background: var(--accent); }
-.switch input:checked + .slider::before { transform: translateX(20px); }
-.theme-selector { display: flex; gap: 8px; }
-.theme-option {
-  width: 32px; height: 32px; border-radius: 50%;
-  border: 2px solid transparent; cursor: pointer; transition: 0.2s;
-}
-.theme-option.active { border-color: var(--primary-text); transform: scale(1.15); }
-.setting-actions { display: flex; flex-direction: column; gap: 8px; }
-.about-info { font-size: 13px; color: var(--secondary-text); line-height: 1.6; }
-.about-info strong { color: var(--primary-text); }
 
-/* Gateway status in settings */
-.gateway-info-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  margin-bottom: var(--space-sm);
+.memory-toolbar .icon-sm {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
 }
-.gateway-info-item {
-  background: rgba(255,255,255,0.3); border-radius: var(--radius-xs);
-  padding: 10px; text-align: center;
-}
-.gateway-info-label { font-size: 11px; color: var(--secondary-text); display: block; margin-bottom: 4px; }
-.gateway-info-value { font-size: 16px; font-weight: 700; color: var(--primary-text); }
 
-/* ========================================
-   Buttons
-   ======================================== */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 10px 18px; border-radius: var(--radius-sm);
-  font-size: 14px; font-weight: 600; font-family: var(--font-body);
-  border: none; cursor: pointer; transition: all 0.2s;
+#memory-search {
+  padding-left: 36px;
 }
-.btn:active { transform: scale(0.97); }
-.btn-primary { background: linear-gradient(135deg, var(--accent), var(--deep-mauve)); color: white; }
-.btn-secondary { background: rgba(255,255,255,0.5); color: var(--primary-text); border: 1px solid var(--glass-border); }
-.btn-danger { background: var(--danger-bg); color: var(--danger); }
-.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: var(--radius-xs); }
-.btn-block { width: 100%; }
-.btn-save { margin-top: var(--space-sm); }
 
-.action-btn {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: rgba(255,255,255,0.4); border: none;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--secondary-text); cursor: pointer;
+.memory-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
 }
-.action-btn.delete { color: var(--danger); }
 
-/* ========================================
-   Forms
-   ======================================== */
-.form-group { margin-bottom: 14px; }
-.form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--secondary-text); margin-bottom: 4px; }
-.form-group input, .form-group select, .form-group textarea {
-  width: 100%; border: 1px solid var(--glass-border);
-  background: rgba(255,255,255,0.5); border-radius: var(--radius-xs);
-  padding: 10px 12px; font-size: 13px; font-family: var(--font-body);
-  color: var(--primary-text); outline: none;
+.memory-tab {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
 }
-.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+
+.memory-tab.active {
   border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
-.form-row { display: flex; gap: 12px; }
-.form-row .form-group { flex: 1; }
 
-/* ========================================
-   Tab Bar
-   ======================================== */
-.tab-bar {
-  position: absolute; bottom: 0; left: 0; width: 100%;
-  height: calc(64px + env(safe-area-inset-bottom, 0px));
-  background: rgba(255,255,255,0.65);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid var(--glass-border);
-  display: flex; justify-content: space-around; align-items: flex-start;
-  padding-top: 10px; z-index: 20;
+.tab-count {
+  font-size: 12px;
+  opacity: 0.8;
 }
-.tab-item {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 3px; width: 56px; cursor: pointer;
-}
-.tab-icon { color: var(--secondary-text); transition: color 0.3s; }
-.tab-label {
-  font-size: 10px; font-weight: 600; color: var(--secondary-text);
-  transition: color 0.3s;
-}
-.tab-item.active .tab-icon {
-  color: var(--deep-mauve);
-  filter: drop-shadow(0 2px 4px rgba(142,96,109,0.3));
-}
-.tab-item.active .tab-label { color: var(--deep-mauve); }
 
-/* ========================================
-   Toast
-   ======================================== */
+.memory-grid,
+.memory-log-list,
+.study-stack,
+.study-log-list,
+.study-feed-column,
+.study-workspace-main,
+.study-workspace-side,
+.study-plan-summary,
+.setting-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.memory-card,
+.memory-log-card,
+.ai-memory-item,
+.reminder-item {
+  padding: 14px;
+}
+
+.memory-card-header,
+.memory-card-footer,
+.memory-log-header,
+.reminder-item,
+.study-session-overview,
+.study-section-head,
+.study-shell-header,
+.study-actions,
+.study-shell-actions,
+.study-inline,
+.study-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.memory-content,
+.ai-memory-content,
+.study-log-body {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.memory-card-body,
+.memory-log-body {
+  margin-top: 8px;
+}
+
+.memory-log-body {
+  display: none;
+}
+
+.memory-log-body.expanded {
+  display: block;
+}
+
+.memory-log-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.memory-log-side {
+  text-align: right;
+}
+
+.memory-log-toggle-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.reminder-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-status.pending {
+  color: #92400e;
+  background: #fffbeb;
+}
+
+.reminder-status.delivered {
+  color: var(--success);
+  background: #ecfdf5;
+}
+
+.study-workspace-shell,
+.study-hero-grid,
+.study-workbench-strip,
+.study-feed-grid,
+.study-metric-band {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.study-card h4,
+.settings-section h4,
+.study-session-title,
+.study-hero-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.study-session-title,
+.study-hero-title {
+  font-size: 18px;
+}
+
+.study-hero-kicker,
+.study-feed-heading {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.study-tool-btn {
+  padding: 14px;
+  text-align: left;
+}
+
+.study-pill.active {
+  border-color: var(--accent);
+  background: #eff6ff;
+  color: var(--accent);
+}
+
+.study-balance-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  overflow: hidden;
+  display: flex;
+}
+
+.study-balance-focus { background: #2563eb; }
+.study-balance-review { background: #93c5fd; }
+.study-balance-recovery { background: #dbeafe; }
+
+.settings-section {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-section h4 {
+  padding: 14px 16px 8px;
+  margin: 0;
+}
+
+.setting-item {
+  min-height: 48px;
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.setting-item.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setting-item.toggle label {
+  margin: 0;
+}
+
+.switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  display: inline-block;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #d1d5db;
+  transition: 0.2s;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  transition: 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+}
+
+.switch input:checked + .slider {
+  background: var(--accent);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(20px);
+}
+
+.theme-selector {
+  display: flex;
+  gap: 10px;
+}
+
+.theme-option {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+
+.theme-option.active {
+  border-color: var(--text);
+}
+
+.empty-state {
+  padding: 48px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
 #toast-container {
-  position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-  z-index: 9999; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
 }
+
 .toast {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 18px; border-radius: 20px;
-  background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(142,96,109,0.15);
-  font-size: 13px; font-weight: 500; color: var(--primary-text);
-  opacity: 0; transform: translateY(-10px);
-  transition: all 0.3s ease;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
-.toast.show { opacity: 1; transform: translateY(0); }
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .toast-success { border-left: 3px solid var(--success); }
 .toast-error { border-left: 3px solid var(--danger); }
-.toast-warning { border-left: 3px solid var(--warning); }
-.toast-info { border-left: 3px solid var(--info); }
+.toast-warning { border-left: 3px solid #d97706; }
+.toast-info { border-left: 3px solid var(--accent); }
 
-/* ========================================
-   Modal
-   ======================================== */
 .modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(106,68,79,0.3); backdrop-filter: blur(4px);
-  z-index: 1000; display: flex; align-items: flex-end; justify-content: center;
-  opacity: 0; transition: opacity 0.3s;
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(17, 24, 39, 0.3);
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
-.modal-overlay.show { opacity: 1; }
+
+.modal-overlay.show {
+  opacity: 1;
+}
+
 .modal-container {
-  width: 100%; max-width: 420px; max-height: 85vh;
-  background: linear-gradient(160deg, var(--bg-gradient-start), var(--bg-gradient-end));
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  display: flex; flex-direction: column;
-  transform: translateY(100%); transition: transform 0.3s ease;
+  width: 100%;
+  max-height: 86vh;
+  background: var(--surface);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  transform: translateY(100%);
+  transition: transform 0.2s ease;
+  display: flex;
+  flex-direction: column;
 }
-.modal-overlay.show .modal-container { transform: translateY(0); }
-.modal-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: var(--space-md) var(--space-md) var(--space-sm);
+
+.modal-overlay.show .modal-container {
+  transform: translateY(0);
 }
-.modal-header h3 {
-  font-family: var(--font-display); font-size: 18px;
-  color: var(--primary-text); font-weight: 700;
-}
-.modal-close {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: rgba(255,255,255,0.5); border: none;
-  font-size: 18px; color: var(--secondary-text); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-}
-.modal-body {
-  flex: 1; overflow-y: auto; padding: 0 var(--space-md);
-  scrollbar-width: none;
-}
-.modal-body::-webkit-scrollbar { display: none; }
+
+.modal-header,
 .modal-footer {
-  display: flex; justify-content: flex-end; gap: 8px;
-  padding: var(--space-sm) var(--space-md) var(--space-md);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-/* ========================================
-   Empty States
-   ======================================== */
-.empty-state {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 40px var(--space-md); text-align: center;
-}
-.empty-state .empty-icon { color: var(--secondary-text); opacity: 0.4; margin-bottom: 12px; }
-.empty-state p { font-size: 14px; color: var(--secondary-text); margin-bottom: var(--space-sm); }
-.empty-text { text-align: center; padding: 16px; font-size: 13px; color: var(--secondary-text); }
-
-/* ========================================
-   Animations
-   ======================================== */
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes typing { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
-@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-
-.updated { animation: pulse 0.5s ease; }
-
-/* ========================================
-   Scrollbar hide global
-   ======================================== */
-::-webkit-scrollbar { width: 0; height: 0; }
-
-/* ========================================
-   Theme Variants
-   ======================================== */
-[data-theme="blue"] {
-  --bg-base: #E3EFF9; --bg-gradient-start: #E8F1FA; --bg-gradient-end: #C1D4E3;
-  --deep-mauve: #4A6FA5; --petal-pink: #D0E1F5; --accent: #6B9BD2;
-  --primary-text: #3B5068; --secondary-text: #728BA3;
-}
-[data-theme="purple"] {
-  --bg-base: #EDE5F3; --bg-gradient-start: #F0E8F5; --bg-gradient-end: #D1C1E3;
-  --deep-mauve: #7B5EA7; --petal-pink: #E0D0F0; --accent: #9B7DC4;
-  --primary-text: #524060; --secondary-text: #8B7898;
-}
-[data-theme="green"] {
-  --bg-base: #E5F3E9; --bg-gradient-start: #E8F5EC; --bg-gradient-end: #C1E3CB;
-  --deep-mauve: #5E8E6D; --petal-pink: #D0F0D8; --accent: #7DBF8E;
-  --primary-text: #3F5F4A; --secondary-text: #78A383;
-}
-[data-theme="orange"] {
-  --bg-base: #F3ECE5; --bg-gradient-start: #F5F0E8; --bg-gradient-end: #E3D1C1;
-  --deep-mauve: #8E7A5E; --petal-pink: #F0E0D0; --accent: #D6A86C;
-  --primary-text: #5F4F3F; --secondary-text: #A3917B;
+.modal-header {
+  border-bottom: 1px solid var(--border);
 }
 
-/* Safe area padding for bottom */
-.page-inner { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+.modal-body {
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+  z-index: 90;
+}
+
+.drawer-backdrop.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.nav-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: min(78vw, 280px);
+  height: 100dvh;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nav-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab-item.active {
+  background: #eff6ff;
+  color: var(--accent);
+}
+
+.tab-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.visually-hidden-nav {
+  display: none;
+}
+
+.updated {
+  outline: 2px solid #dbeafe;
+}
+
+@keyframes typing {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@media (max-width: 374px) {
+  .grid-2,
+  .form-row,
+  .study-form-grid,
+  .study-meta-grid,
+  .gateway-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-title {
+    font-size: 16px;
+  }
+}
   </style>
 </head>
 <body>
@@ -1202,16 +1225,46 @@ svg.icon, svg.icon-sm, svg.icon-lg, svg.icon-xl { fill: none; stroke: currentCol
   </div>
 </div>
 
-<!-- Main Device Frame -->
-<div class="device">
-  <!-- Ambient background -->
-  <div class="ambient-layer">
-    <div class="flower-blur f1"></div>
-    <div class="flower-blur f2"></div>
-    <div class="flower-blur f3"></div>
+<div id="drawer-backdrop" class="drawer-backdrop" onclick="toggleDrawer(false)"></div>
+<div id="nav-drawer" class="nav-drawer" aria-hidden="true">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title">Saki</div>
+      <div class="page-subtitle">导航</div>
+    </div>
+    <button class="icon-btn" onclick="toggleDrawer(false)">
+      <svg class="icon"><use href="#i-close"/></svg>
+    </button>
   </div>
+  <div class="drawer-nav">
+    <div class="tab-item active" data-page="home" onclick="app.showHome(); toggleDrawer(false)">
+      <span class="tab-icon"><svg class="icon"><use href="#i-home"/></svg></span>
+      <span class="tab-label">首页</span>
+    </div>
+    <div class="tab-item" data-page="chat" onclick="app.showChat(); toggleDrawer(false)">
+      <span class="tab-icon"><svg class="icon"><use href="#i-chat"/></svg></span>
+      <span class="tab-label">聊天</span>
+    </div>
+    <div class="tab-item" data-page="memory" onclick="app.showMemory(); toggleDrawer(false)">
+      <span class="tab-icon"><svg class="icon"><use href="#i-memory"/></svg></span>
+      <span class="tab-label">记忆</span>
+    </div>
+    <div class="tab-item" data-page="reminders" onclick="app.showReminders(); toggleDrawer(false)">
+      <span class="tab-icon"><svg class="icon"><use href="#i-bell"/></svg></span>
+      <span class="tab-label">提醒</span>
+    </div>
+    <div class="tab-item" data-page="study" onclick="app.showStudy(); toggleDrawer(false)">
+      <span class="tab-icon"><svg class="icon"><use href="#i-clock"/></svg></span>
+      <span class="tab-label">学习</span>
+    </div>
+    <div class="tab-item" data-page="settings" onclick="app.showSettings(); toggleDrawer(false)">
+      <span class="tab-icon"><svg class="icon"><use href="#i-settings"/></svg></span>
+      <span class="tab-label">设置</span>
+    </div>
+  </div>
+</div>
 
-  <!-- Status Bar -->
+<div class="app-shell">
   <div class="status-bar">
     <span id="status-time"></span>
     <span class="status-icons">
@@ -1219,226 +1272,299 @@ svg.icon, svg.icon-sm, svg.icon-lg, svg.icon-xl { fill: none; stroke: currentCol
     </span>
   </div>
 
-  <!-- Content Area -->
-  <div class="content-area">
-
-    <!-- ======== HOME PAGE ======== -->
+  <div class="page-stack">
     <div class="page active" id="page-home">
+      <div class="page-header">
+        <div class="header-title-group">
+          <button class="icon-btn" onclick="toggleDrawer(true)">
+            <svg class="icon"><use href="#i-home"/></svg>
+          </button>
+          <div>
+            <div class="page-title">首页</div>
+            <div class="page-subtitle">轻量移动端工作台</div>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="action-btn" onclick="app.showChat()">
+            <svg class="icon"><use href="#i-chat"/></svg>
+          </button>
+          <button class="action-btn" onclick="app.showSettings()">
+            <svg class="icon"><use href="#i-settings"/></svg>
+          </button>
+        </div>
+      </div>
       <div class="page-inner">
-        <div class="home-header">
-          <h1>Saki</h1>
-          <div class="subtitle">Gateway</div>
-        </div>
+        <div class="home-hero">
+          <div class="card partner-card" id="partner-card">
+            <div class="partner-top">
+              <div class="avatar-container">
+                <div class="avatar-placeholder"></div>
+              </div>
+              <div>
+                <div class="partner-name" id="home-partner-name">TA</div>
+                <div class="gateway-status-badge" id="home-gateway-status">
+                  <span class="status-dot" id="home-status-dot"></span>
+                  <span id="home-status-text">检查中...</span>
+                </div>
+              </div>
+            </div>
+            <div class="card-sub">保持专注、聊天、记忆与提醒，都在同一个入口里。</div>
+          </div>
 
-        <!-- Partner Card -->
-        <div class="card partner-card" id="partner-card">
-          <div class="avatar-container">
-            <div class="avatar-placeholder"></div>
-            <div class="avatar-status"></div>
-          </div>
-          <div class="partner-name" id="home-partner-name">TA</div>
-          <div class="gateway-status-badge" id="home-gateway-status">
-            <span class="status-dot" id="home-status-dot"></span>
-            <span id="home-status-text">检查中...</span>
-          </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="grid-2">
-          <div class="card action-card" onclick="app.showChat()">
-            <div class="icon-box"><svg class="icon"><use href="#i-chat"/></svg></div>
-            <div>
-              <div class="card-label">聊天</div>
-              <div class="card-sub">和 TA 聊聊天</div>
+          <div class="grid-2">
+            <div class="card action-card" onclick="app.showChat()">
+              <div class="icon-box"><svg class="icon"><use href="#i-chat"/></svg></div>
+              <div>
+                <div class="card-label">聊天</div>
+                <div class="card-sub">开始新对话</div>
+              </div>
             </div>
-          </div>
-          <div class="card action-card" onclick="app.showMemory()">
-            <div class="icon-box"><svg class="icon"><use href="#i-memory"/></svg></div>
-            <div>
-              <div class="card-label">记忆库</div>
-              <div class="card-sub" id="home-memory-count">加载中...</div>
+            <div class="card action-card" onclick="app.showMemory()">
+              <div class="icon-box"><svg class="icon"><use href="#i-memory"/></svg></div>
+              <div>
+                <div class="card-label">记忆</div>
+                <div class="card-sub" id="home-memory-count">加载中...</div>
+              </div>
             </div>
-          </div>
-          <div class="card action-card" onclick="app.showReminders()">
-            <div class="icon-box"><svg class="icon"><use href="#i-bell"/></svg></div>
-            <div>
-              <div class="card-label">提醒</div>
-              <div class="card-sub" id="home-reminder-count">加载中...</div>
+            <div class="card action-card" onclick="app.showReminders()">
+              <div class="icon-box"><svg class="icon"><use href="#i-bell"/></svg></div>
+              <div>
+                <div class="card-label">提醒</div>
+                <div class="card-sub" id="home-reminder-count">加载中...</div>
+              </div>
             </div>
-          </div>
-          <div class="card action-card" onclick="app.showStudy()">
-            <div class="icon-box"><svg class="icon"><use href="#i-clock"/></svg></div>
-            <div>
-              <div class="card-label">学习</div>
-              <div class="card-sub" id="home-study-status">查看当前学习状态</div>
+            <div class="card action-card" onclick="app.showStudy()">
+              <div class="icon-box"><svg class="icon"><use href="#i-clock"/></svg></div>
+              <div>
+                <div class="card-label">学习</div>
+                <div class="card-sub" id="home-study-status">查看当前学习状态</div>
+              </div>
             </div>
-          </div>
-          <div class="card action-card" onclick="app.showSettings()">
-            <div class="icon-box"><svg class="icon"><use href="#i-settings"/></svg></div>
-            <div>
-              <div class="card-label">设置</div>
-              <div class="card-sub">网关配置</div>
+            <div class="card action-card" onclick="app.showSettings()">
+              <div class="icon-box"><svg class="icon"><use href="#i-settings"/></svg></div>
+              <div>
+                <div class="card-label">设置</div>
+                <div class="card-sub">网关配置</div>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Chat Preview -->
-        <div class="section-header">
-          <span class="section-title">Recent</span>
-          <span class="section-link" onclick="app.showChat()">查看全部</span>
-        </div>
-        <div class="message-preview" id="home-chat-preview" onclick="app.showChat()">
-          <div class="msg-avatar"></div>
-          <div class="msg-content">
-            <div class="msg-name" id="preview-name">TA</div>
-            <div class="msg-text" id="preview-text">点击开始聊天...</div>
           </div>
         </div>
 
-        <!-- Gateway Tools -->
-        <div class="section-header">
-          <span class="section-title">Tools</span>
+        <div class="page-section">
+          <div class="section-header">
+            <span class="section-title">最近对话</span>
+            <span class="section-link" onclick="app.showChat()">查看全部</span>
+          </div>
+          <div class="message-preview" id="home-chat-preview" onclick="app.showChat()">
+            <div class="msg-avatar"></div>
+            <div class="msg-content">
+              <div class="msg-name" id="preview-name">TA</div>
+              <div class="msg-text" id="preview-text">点击开始聊天...</div>
+            </div>
+          </div>
         </div>
-        <div class="list-group" id="home-tools-list">
-          <div class="empty-text">加载中...</div>
+
+        <div class="page-section">
+          <div class="section-header">
+            <span class="section-title">已启用工具</span>
+          </div>
+          <div class="list-group" id="home-tools-list">
+            <div class="empty-text">加载中...</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ======== CHAT PAGE ======== -->
-    <div class="page" id="page-chat">
+    <div class="page chat-page" id="page-chat">
       <div class="chat-page-header">
-        <button class="back-btn" onclick="app.goBack()">
-          <svg class="icon"><use href="#i-back"/></svg>
-        </button>
-        <span class="page-title" id="chat-partner-name">TA</span>
-        <button class="chat-tool-btn" onclick="app.showChatMenu()" style="background:none;">
-          <svg class="icon"><use href="#i-info"/></svg>
-        </button>
+        <div class="header-title-group">
+          <button class="icon-btn" onclick="toggleDrawer(true)">
+            <svg class="icon"><use href="#i-home"/></svg>
+          </button>
+          <span class="page-title" id="chat-partner-name">TA</span>
+        </div>
+        <div class="page-actions">
+          <button class="back-btn" onclick="app.goBack()">
+            <svg class="icon"><use href="#i-back"/></svg>
+          </button>
+          <button class="chat-tool-btn" onclick="app.showChatMenu()">
+            <svg class="icon"><use href="#i-info"/></svg>
+          </button>
+        </div>
       </div>
       <div class="chat-messages" id="chat-messages"></div>
       <div class="chat-input-area" id="chat-input-area">
-        <textarea id="chat-input" rows="1" placeholder="说点什么..." onkeydown="app.handleChatKeydown(event)"></textarea>
+        <textarea id="chat-input" rows="1" placeholder="发消息..." onkeydown="app.handleChatKeydown(event)"></textarea>
         <button class="chat-send-btn" onclick="app.sendMessage()">
           <svg class="icon"><use href="#i-send"/></svg>
         </button>
       </div>
     </div>
 
-    <!-- ======== MEMORY PAGE ======== -->
     <div class="page" id="page-memory">
-      <div class="page-inner">
-        <div class="page-header">
+      <div class="page-header">
+        <div class="header-title-group">
+          <button class="icon-btn" onclick="toggleDrawer(true)">
+            <svg class="icon"><use href="#i-home"/></svg>
+          </button>
+          <span class="page-title">记忆</span>
+        </div>
+        <div class="page-actions">
           <button class="back-btn" onclick="app.goBack()">
             <svg class="icon"><use href="#i-back"/></svg>
           </button>
-          <span class="page-title">Memory</span>
-          <div class="page-actions">
-            <button class="action-btn delete" id="memory-clear-btn" onclick="app.clearAllMemories()" title="一键清空记忆与日志">
-              <svg class="icon"><use href="#i-trash"/></svg>
-            </button>
-            <button class="action-btn" id="memory-add-btn" onclick="app.showAddMemoryModal()" title="添加记忆">
-              <svg class="icon"><use href="#i-plus"/></svg>
-            </button>
-          </div>
+          <button class="action-btn delete" id="memory-clear-btn" onclick="app.clearAllMemories()" title="一键清空记忆与日志">
+            <svg class="icon"><use href="#i-trash"/></svg>
+          </button>
+          <button class="action-btn" id="memory-add-btn" onclick="app.showAddMemoryModal()" title="添加记忆">
+            <svg class="icon"><use href="#i-plus"/></svg>
+          </button>
         </div>
-
-        <!-- Search bar -->
-        <div style="margin-bottom:var(--space-sm);position:relative;">
-          <input type="text" id="memory-search" placeholder="搜索记忆..." style="width:100%;border:1px solid var(--glass-border);background:rgba(255,255,255,0.5);border-radius:20px;padding:10px 16px 10px 40px;font-size:13px;font-family:var(--font-body);color:var(--primary-text);outline:none;">
-          <svg class="icon-sm" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--secondary-text);"><use href="#i-search"/></svg>
+      </div>
+      <div class="page-inner">
+        <div class="memory-toolbar">
+          <input type="text" id="memory-search" placeholder="搜索记忆...">
+          <svg class="icon-sm"><use href="#i-search"/></svg>
         </div>
-
-        <!-- Category tabs -->
         <div class="memory-tabs" id="memory-tabs"></div>
-
-        <!-- Memory content -->
         <div id="memory-content"></div>
       </div>
     </div>
 
-    <!-- ======== REMINDERS PAGE ======== -->
     <div class="page" id="page-reminders">
-      <div class="page-inner">
-        <div class="page-header">
+      <div class="page-header">
+        <div class="header-title-group">
+          <button class="icon-btn" onclick="toggleDrawer(true)">
+            <svg class="icon"><use href="#i-home"/></svg>
+          </button>
+          <span class="page-title">提醒</span>
+        </div>
+        <div class="page-actions">
           <button class="back-btn" onclick="app.goBack()">
             <svg class="icon"><use href="#i-back"/></svg>
           </button>
-          <span class="page-title">Reminders</span>
           <button class="action-btn" onclick="app.showAddReminderModal()">
             <svg class="icon"><use href="#i-plus"/></svg>
           </button>
         </div>
+      </div>
+      <div class="page-inner">
         <div id="reminders-content"></div>
       </div>
     </div>
 
-    <!-- ======== STUDY PAGE ======== -->
     <div class="page" id="page-study">
-      <div class="page-inner">
-        <div class="page-header">
+      <div class="page-header">
+        <div class="header-title-group">
+          <button class="icon-btn" onclick="toggleDrawer(true)">
+            <svg class="icon"><use href="#i-home"/></svg>
+          </button>
+          <span class="page-title">学习</span>
+        </div>
+        <div class="page-actions">
           <button class="back-btn" onclick="app.goBack()">
             <svg class="icon"><use href="#i-back"/></svg>
           </button>
-          <span class="page-title">Study</span>
           <button class="action-btn" onclick="app.refreshStudyData()">
             <svg class="icon"><use href="#i-refresh"/></svg>
           </button>
         </div>
+      </div>
+      <div class="page-inner">
         <div id="study-content" class="study-stack">
-          <div class="empty-text">加载中...</div>
+          <div class="study-card">
+            <div class="study-eyebrow">当前会话</div>
+            <h4>状态与模式</h4>
+            <div class="card-sub">在这里查看状态、模式、已用和剩余时间。</div>
+          </div>
+          <div class="study-card">
+            <div class="study-eyebrow">番茄钟快捷操作</div>
+            <div class="study-actions">
+              <button class="btn btn-secondary">开始</button>
+              <button class="btn btn-secondary">暂停</button>
+              <button class="btn btn-primary">完成</button>
+            </div>
+          </div>
+          <div class="study-card">
+            <div class="study-eyebrow">Plan Tracker</div>
+            <div class="form-group">
+              <label>当前任务</label>
+              <input type="text" placeholder="正在做什么">
+            </div>
+            <div class="form-group">
+              <label>下一步</label>
+              <input type="text" placeholder="下一步要做什么">
+            </div>
+            <button class="btn btn-primary btn-block">保存</button>
+          </div>
+          <div class="study-card">
+            <div class="study-eyebrow">Check-in</div>
+            <div class="form-group">
+              <label>能量（1-5）</label>
+              <input type="range" min="1" max="5" value="3">
+            </div>
+            <div class="form-group">
+              <label>压力（1-5）</label>
+              <input type="range" min="1" max="5" value="2">
+            </div>
+            <button class="btn btn-secondary btn-block">提交</button>
+          </div>
+          <div class="study-card">
+            <div class="study-eyebrow">近期趋势</div>
+            <div class="card-sub">专注时长、完成率与恢复情况将以简洁文字摘要呈现。</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ======== SETTINGS PAGE ======== -->
     <div class="page" id="page-settings">
-      <div class="page-inner">
-        <div class="page-header">
+      <div class="page-header">
+        <div class="header-title-group">
+          <button class="icon-btn" onclick="toggleDrawer(true)">
+            <svg class="icon"><use href="#i-home"/></svg>
+          </button>
+          <span class="page-title">设置</span>
+        </div>
+        <div class="page-actions">
           <button class="back-btn" onclick="app.goBack()">
             <svg class="icon"><use href="#i-back"/></svg>
           </button>
-          <span class="page-title">Settings</span>
           <button class="action-btn" onclick="app.refreshGatewayConfig()">
             <svg class="icon"><use href="#i-refresh"/></svg>
           </button>
         </div>
-
-        <!-- Gateway Status -->
+      </div>
+      <div class="page-inner">
         <div id="settings-gateway-status"></div>
-
-        <!-- Settings content rendered by JS -->
         <div id="settings-content"></div>
       </div>
-    </div>
-
-  </div><!-- end content-area -->
-
-  <!-- Tab Bar -->
-  <div class="tab-bar">
-    <div class="tab-item active" data-page="home" onclick="app.showHome()">
-      <span class="tab-icon"><svg class="icon"><use href="#i-home"/></svg></span>
-      <span class="tab-label">首页</span>
-    </div>
-    <div class="tab-item" data-page="chat" onclick="app.showChat()">
-      <span class="tab-icon"><svg class="icon"><use href="#i-chat"/></svg></span>
-      <span class="tab-label">聊天</span>
-    </div>
-    <div class="tab-item" data-page="memory" onclick="app.showMemory()">
-      <span class="tab-icon"><svg class="icon"><use href="#i-memory"/></svg></span>
-      <span class="tab-label">记忆</span>
-    </div>
-    <div class="tab-item" data-page="study" onclick="app.showStudy()">
-      <span class="tab-icon"><svg class="icon"><use href="#i-clock"/></svg></span>
-      <span class="tab-label">学习</span>
-    </div>
-    <div class="tab-item" data-page="settings" onclick="app.showSettings()">
-      <span class="tab-icon"><svg class="icon"><use href="#i-settings"/></svg></span>
-      <span class="tab-label">设置</span>
     </div>
   </div>
 </div>
 
+<div class="visually-hidden-nav" aria-hidden="true">
+  <div class="tab-item" data-page="home" onclick="app.showHome()"></div>
+  <div class="tab-item" data-page="chat" onclick="app.showChat()"></div>
+  <div class="tab-item" data-page="memory" onclick="app.showMemory()"></div>
+  <div class="tab-item" data-page="study" onclick="app.showStudy()"></div>
+  <div class="tab-item" data-page="settings" onclick="app.showSettings()"></div>
+</div>
+
+<script>
+  function toggleDrawer(force) {
+    var drawer = document.getElementById('nav-drawer');
+    var backdrop = document.getElementById('drawer-backdrop');
+    if (!drawer || !backdrop) return;
+    var open = typeof force === 'boolean' ? force : !drawer.classList.contains('open');
+    drawer.classList.toggle('open', open);
+    backdrop.classList.toggle('show', open);
+    drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+  }
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') toggleDrawer(false);
+  });
+</script>
 <script src="app.js"></script>
 </body>
 </html>
