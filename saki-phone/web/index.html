@@ -32,22 +32,27 @@
   </script>
   <style>
 :root {
-  --bg: #ffffff;
+  --bg: #f8fafc;
   --surface: #ffffff;
   --surface-muted: #f9fafb;
   --surface-soft: #f3f4f6;
-  --text: #1a1a1a;
+  --text: #111827;
   --text-secondary: #6b7280;
+  --text-muted: #374151;
   --border: #e5e7eb;
+  --border-strong: #d1d5db;
   --accent: #2563eb;
   --accent-strong: #1d4ed8;
+  --accent-soft: #dbeafe;
+  --accent-surface: #eff6ff;
   --danger: #dc2626;
   --success: #059669;
   --header-height: 48px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.1);
   --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -71,8 +76,8 @@ body {
   width: 100vw;
   height: 100dvh;
   background: var(--bg);
-  color: var(--text);
-  font: 15px/1.6 var(--font-body);
+  color: var(--text-muted);
+  font: 14px/1.6 var(--font-body);
 }
 
 button,
@@ -150,9 +155,9 @@ svg.icon-xl {
   z-index: 30;
   height: var(--header-height);
   min-height: var(--header-height);
-  padding: 0 12px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.96);
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -178,7 +183,7 @@ svg.icon-xl {
 }
 
 .page-subtitle {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -197,6 +202,16 @@ svg.icon-xl {
   background: var(--surface);
   cursor: pointer;
   flex-shrink: 0;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.icon-btn:active,
+.back-btn:active,
+.action-btn:active,
+.chat-tool-btn:active,
+.modal-close:active {
+  background: var(--surface-soft);
+  transform: scale(0.98);
 }
 
 .back-btn {
@@ -259,15 +274,12 @@ svg.icon-xl {
 .study-log-item,
 .study-hero-panel,
 .study-support-callout,
-.study-tool-btn,
-.study-pill,
 .study-stat.prominent,
-.study-log-item,
 .study-hero-panel-primary {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .card,
@@ -282,23 +294,41 @@ svg.icon-xl {
   justify-content: center;
   gap: 6px;
   min-height: 40px;
-  padding: 0 16px;
+  padding: 10px 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.btn:active,
+.chat-send-btn:active,
+.memory-tab:active,
+.tab-item:active {
+  transform: scale(0.98);
 }
 
 .btn-primary {
-  border-color: var(--accent);
-  background: var(--accent);
+  background: #2563eb;
   color: #fff;
+  border: none;
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible,
+.chat-send-btn:hover,
+.chat-send-btn:focus-visible {
+  background: var(--accent-strong);
 }
 
 .btn-secondary {
-  background: var(--surface);
-  color: var(--text);
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
 }
 
 .btn-danger {
@@ -309,7 +339,7 @@ svg.icon-xl {
 
 .btn-sm {
   min-height: 32px;
-  padding: 0 12px;
+  padding: 7px 12px;
   font-size: 13px;
 }
 
@@ -345,9 +375,11 @@ svg.icon-xl {
 .gateway-info-label {
   display: block;
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: #6b7280;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .form-group input,
@@ -361,12 +393,14 @@ svg.icon-xl {
 #memory-search,
 .chat-input-area textarea {
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
   color: var(--text);
   padding: 10px 12px;
+  font-size: 14px;
   outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .form-group input:focus,
@@ -377,7 +411,8 @@ svg.icon-xl {
 .setting-item select:focus,
 #memory-search:focus,
 .chat-input-area textarea:focus {
-  border-color: var(--accent);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .home-hero {
@@ -416,7 +451,7 @@ svg.icon-xl {
 .avatar-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+  background: #e5e7eb;
 }
 
 .partner-name {
@@ -433,11 +468,11 @@ svg.icon-xl {
   align-items: center;
   gap: 6px;
   min-height: 28px;
-  padding: 0 10px;
+  padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
-  color: var(--text-secondary);
+  border: none;
+  background: #f3f4f6;
+  color: #374151;
   font-size: 12px;
 }
 
@@ -483,11 +518,16 @@ svg.icon-xl {
 .list-title,
 .reminder-content,
 .study-log-title,
-.study-tool-title,
 .memory-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
+}
+
+.study-tool-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
 }
 
 .card-sub,
@@ -499,7 +539,6 @@ svg.icon-xl {
 .ai-memory-time,
 .study-log-time,
 .study-note,
-.study-tool-desc,
 .study-hero-copy,
 .study-mini-stat span,
 .study-mini-stat strong,
@@ -510,6 +549,11 @@ svg.icon-xl {
 .empty-text {
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+.study-tool-desc {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .list-group {
@@ -609,21 +653,25 @@ svg.icon-xl {
   border-radius: 12px;
   padding: 12px 14px;
   word-break: break-word;
+  box-shadow: var(--shadow-sm);
 }
 
 .chat-message .message-bubble-inner {
-  background: var(--surface-soft);
-  color: var(--text);
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 
 .chat-message.user .message-bubble-inner {
   background: var(--accent);
   color: #fff;
+  border-color: var(--accent);
 }
 
 .chat-message.system .system-content {
   background: var(--surface-muted);
   color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 
 .tool-context-indicator {
@@ -655,6 +703,123 @@ svg.icon-xl {
 .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 
+.token-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 3px 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  width: fit-content;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.token-in { color: #6b7280; }
+.token-out { color: #2563eb; }
+.token-sep { color: #d1d5db; }
+.token-total { font-weight: 500; color: #374151; }
+
+.thinking-block {
+  margin-bottom: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f9fafb;
+  max-width: 80%;
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.thinking-header svg {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.thinking-toggle-icon {
+  margin-left: auto;
+  font-size: 16px;
+  color: #9ca3af;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.thinking-block.open .thinking-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.thinking-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.thinking-content.open {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.thinking-content pre {
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #374151;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.floating-thinking {
+  position: fixed;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(17, 24, 39, 0.85);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.floating-thinking.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.floating-thinking-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #60a5fa;
+  animation: thinking-pulse 1.2s ease infinite;
+  flex-shrink: 0;
+}
+
 .chat-input-area {
   position: fixed;
   left: 0;
@@ -666,7 +831,7 @@ svg.icon-xl {
   gap: 8px;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.98);
+  background: #fff;
 }
 
 .chat-input-area textarea {
@@ -680,9 +845,10 @@ svg.icon-xl {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  border: 1px solid var(--accent);
+  border: none;
   background: var(--accent);
   color: #fff;
+  box-shadow: var(--shadow-sm);
 }
 
 .chat-send-btn svg {
@@ -730,9 +896,9 @@ svg.icon-xl {
 }
 
 .memory-tab.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
+  border-color: var(--accent-soft);
+  background: var(--accent-surface);
+  color: var(--accent-strong);
 }
 
 .tab-count {
@@ -748,7 +914,12 @@ svg.icon-xl {
 .study-workspace-main,
 .study-workspace-side,
 .study-plan-summary,
-.setting-actions {
+.setting-actions,
+.study-workspace-shell,
+.study-hero-grid,
+.study-workbench-strip,
+.study-feed-grid,
+.study-metric-band {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -780,8 +951,10 @@ svg.icon-xl {
 
 .memory-content,
 .ai-memory-content,
-.study-log-body {
-  color: var(--text-secondary);
+.study-log-body,
+p,
+li {
+  color: #374151;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -828,47 +1001,236 @@ svg.icon-xl {
   background: #ecfdf5;
 }
 
-.study-workspace-shell,
-.study-hero-grid,
-.study-workbench-strip,
-.study-feed-grid,
-.study-metric-band {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .study-card h4,
 .settings-section h4,
 .study-session-title,
-.study-hero-title {
-  font-size: 16px;
+.study-hero-title,
+h4 {
+  font-size: 17px;
   font-weight: 600;
-  color: var(--text);
-}
-
-.study-session-title,
-.study-hero-title {
-  font-size: 18px;
+  color: #111827;
 }
 
 .study-hero-kicker,
 .study-feed-heading {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
 .study-tool-btn {
-  padding: 14px;
+  padding: 14px 16px;
   text-align: left;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.study-tool-btn:active {
+  background: #f3f4f6;
+  transform: scale(0.99);
+}
+
+.study-tool-btn.primary {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.study-tool-btn.primary .study-tool-title {
+  color: #1d4ed8;
 }
 
 .study-pill.active {
-  border-color: var(--accent);
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+
+/* Insert below study tool button styles: widget-specific emphasis */
+.pomodoro-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 12px;
+}
+
+.pomodoro-ring-wrap {
+  position: relative;
+  width: 160px;
+  height: 160px;
+}
+
+.pomodoro-ring {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: conic-gradient(#2563eb 0%, #dbeafe 0%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.pomodoro-ring::before {
+  content: '';
+  position: absolute;
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.pomodoro-time {
+  font-size: 38px;
+  font-weight: 700;
+  color: #111827;
+  position: relative;
+  z-index: 1;
+  line-height: 1;
+}
+
+.pomodoro-label {
+  font-size: 12px;
+  color: #6b7280;
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+}
+
+.pomodoro-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.pomo-btn {
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.18s ease, filter 0.18s ease, background 0.18s ease;
+}
+
+.pomo-btn:active {
+  transform: scale(0.97);
+}
+
+.pomo-start {
+  background: #2563eb;
+  color: #fff;
+}
+
+.pomo-pause {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.pomo-done {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.pomodoro-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.pomodoro-ring.active {
+  background: conic-gradient(
+    #2563eb calc(var(--progress, 0) * 1%),
+    #dbeafe calc(var(--progress, 0) * 1%)
+  );
+}
+
+/* Insert below existing study plan card styles: plan tracker widget treatment */
+#study-plan-card {
+  border-left: 3px solid #2563eb;
+  border-radius: 12px;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.study-plan-summary {
+  gap: 8px;
+}
+
+.study-plan-line {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f9fafb;
+  border: none;
+  box-shadow: none;
+}
+
+.study-plan-line span {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9ca3af;
+}
+
+.study-plan-line strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.study-plan-line:first-child {
   background: #eff6ff;
-  color: var(--accent);
+}
+
+.study-plan-line:first-child strong {
+  color: #1d4ed8;
+}
+
+#study-plan-card .study-form-grid {
+  margin-top: 12px;
+}
+
+#study-plan-card .setting-item label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#study-plan-card input,
+#study-plan-card textarea {
+  font-size: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: #fafafa;
+}
+
+#study-plan-card .study-actions {
+  margin-top: 12px;
+  gap: 8px;
 }
 
 .study-balance-bar {
@@ -1072,6 +1434,7 @@ svg.icon-xl {
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--text-secondary);
+  background: #fff;
 }
 
 .drawer-backdrop {
@@ -1104,6 +1467,7 @@ svg.icon-xl {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .nav-drawer.open {
@@ -1157,6 +1521,11 @@ svg.icon-xl {
   outline: 2px solid #dbeafe;
 }
 
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.75); }
+}
+
 @keyframes typing {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 1; }
@@ -1175,7 +1544,7 @@ svg.icon-xl {
     font-size: 16px;
   }
 }
-  </style>
+</style>
 </head>
 <body>
 
@@ -1212,6 +1581,11 @@ svg.icon-xl {
 
 <!-- Toast Container -->
 <div id="toast-container"></div>
+
+<div id="floating-thinking" class="floating-thinking">
+  <div class="floating-thinking-dot"></div>
+  <span class="floating-thinking-text">思考中...</span>
+</div>
 
 <!-- Modal Container -->
 <div id="modal-overlay" class="modal-overlay" style="display:none">
